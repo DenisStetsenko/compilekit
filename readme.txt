@@ -23,6 +23,10 @@ Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and
 3. Go to "CompileKit" in the admin menu.
 4. Download the CLI binary, set paths, and run compiler.
 
+== External services ==
+This plugin connects to GitHub API to check for Tailwind CSS CLI updates. It's needed to get the latest available version or download CLI if missing.
+HTTP request to GitHub's public API with user-agent "WordPress/compilekit" happens only when user clicks "Check for Updates", "Download Tailwind CLI" or "Reinstall Tailwind CLI" buttons in Admin panel.
+Learn more about [privacy policy](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) and [terms of service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service).
 
 == Changelog ==
 
