@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CompileKit for Tailwind CSS
  * Description: Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.
- * Version: 2.1.1
+ * Version: 2.1.2
  * Author: Denis Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
  * Plugin URI: https://github.com/DenisStetsenko/compilekit
@@ -13,12 +13,16 @@
  * Requires PHP: 8.0
  * Text Domain: compilekit
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) {
+	exit;
+}
 
 /**
  * Download Tailwind Standalone CLI
+ *
+ * @param bool $force Whether to force download even if file exists
  */
-function compilekit_download_tailwind_cli() {
+function compilekit_download_tailwind_cli( $force = false ) {
 	global $wp_filesystem;
 
 	if ( ! function_exists( 'WP_Filesystem' ) ) {
@@ -27,11 +31,17 @@ function compilekit_download_tailwind_cli() {
 	WP_Filesystem();
 
 	$upload_dir = wp_upload_dir();
-	$base_dir 	= trailingslashit( $upload_dir['basedir'] ) . '/compilekit/bin/';
+	$base_dir 	= trailingslashit( $upload_dir['basedir'] ) . 'compilekit/bin/';
 	$dest     	= $base_dir . 'tailwindcss';
 
-	if ( $wp_filesystem->is_file( $dest ) ) {
+	// Only check if file exists when not forcing reinstall
+	if ( ! $force && $wp_filesystem->is_file( $dest ) ) {
 		return __( 'Current Tailwind Standalone CLI is the latest version.', 'compilekit' );
+	}
+
+	// If forcing and file exists, delete it first
+	if ( $force && $wp_filesystem->is_file( $dest ) ) {
+		$wp_filesystem->delete( $dest );
 	}
 
 	// Recursively create directories
@@ -85,6 +95,10 @@ function compilekit_download_tailwind_cli() {
 
 	// Set permissions
 	$wp_filesystem->chmod( $dest, 0755 );
+
+	if ( $force ) {
+		return __( 'Tailwind Standalone CLI was successfully reinstalled.', 'compilekit' );
+	}
 
 	return __( 'The latest version of Tailwind Standalone CLI was installed successfully.', 'compilekit' );
 }
@@ -264,9 +278,9 @@ function compilekit_render_page() {
 		}
 
 		check_admin_referer( 'compilekit_settings_action' );
-		$message = compilekit_download_tailwind_cli();
+		$result = compilekit_download_tailwind_cli();
 
-		echo '<div class="notice notice-info"><p>' . esc_html( $message ) . '</p></div>';
+		echo '<div class="notice notice-info"><p>' . esc_html( $result ) . '</p></div>';
 		$cli_installed = file_exists( compilekit_get_binary_path() ); // recheck
 	}
 	
@@ -435,21 +449,10 @@ function compilekit_render_updates_page() {
 
 		check_admin_referer( 'compilekit_update_action' );
 
-		// Delete and reinstall
-		global $wp_filesystem;
-		if ( ! function_exists( 'WP_Filesystem' ) ) {
-			require_once ABSPATH . 'wp-admin/includes/file.php';
-		}
-		WP_Filesystem();
-
-		$bin_dir = plugin_dir_path( __FILE__ ) . 'bin/';
-		if ( $wp_filesystem->is_dir( $bin_dir ) ) {
-			$wp_filesystem->delete( $bin_dir, true );
-		}
-
-		$message = compilekit_download_tailwind_cli();
-		if ( $message ) {
-			echo '<div class="notice notice-info"><p>' . esc_html( $message ) . '</p></div>';
+		// Force reinstall by passing true
+		$result = compilekit_download_tailwind_cli( true );
+		if ( $result ) {
+			echo '<div class="notice notice-info"><p>' . esc_html( $result ) . '</p></div>';
 		}
 
 		$get_version     = compilekit_check_version( $binary );
