@@ -33,6 +33,7 @@ Learn more about [privacy policy](https://docs.github.com/en/site-policy/privacy
 = 2.1.3 =
 * Release Date: 28 August 2025
 * General code updates and improvements.
+* Added fallback method to compile CSS via npx if binary fails.
 
 = 2.1.2 =
 * Release Date: 23 August 2025

@@ -30,9 +30,15 @@ function compilekit_download_tailwind_cli( $force = false ) {
 	}
 	WP_Filesystem();
 
-	$upload_dir = wp_upload_dir();
-	$base_dir 	= trailingslashit( $upload_dir['basedir'] ) . 'compilekit/bin/';
-	$dest     	= $base_dir . 'tw';
+	$upload_dir 	= wp_upload_dir();
+	$home_dir 		= trailingslashit( $upload_dir['basedir'] ) . 'compilekit/';
+	$base_dir 		= trailingslashit( $upload_dir['basedir'] ) . 'compilekit/bin/';
+	$dest     		= $base_dir . 'tw';
+
+	// Check if PHP exec() is available
+	if ( ! function_exists( 'exec' ) ) {
+		return __( 'PHP exec() function is required for this plugin but not available or disabled on the server.', 'compilekit' );
+	}
 
 	// Only check if file exists when not forcing reinstall
 	if ( ! $force && $wp_filesystem->is_file( $dest ) ) {
@@ -40,8 +46,8 @@ function compilekit_download_tailwind_cli( $force = false ) {
 	}
 
 	// If forcing and file exists, delete it first
-	if ( $force && $wp_filesystem->is_file( $dest ) ) {
-		$wp_filesystem->delete( $dest );
+	if ( $force && $wp_filesystem->is_dir( $home_dir ) ) {
+		$wp_filesystem->delete( $home_dir, true ); // recursive **/*.* delete
 	}
 
 	// Recursively create directories
@@ -136,10 +142,48 @@ function compilekit_download_tailwind_cli( $force = false ) {
 	// Set permissions
 	$wp_filesystem->chmod( $dest, 0755 );
 
-	// NEW: Verify final file is accessible using WP_Filesystem
+	// NEW: Verify final 'tw' binary file is accessible using WP_Filesystem
 	if ( ! $wp_filesystem->is_readable( $dest ) || $wp_filesystem->size( $dest ) === 0 ) {
 		return __( 'Warning: Tailwind CLI was downloaded successfully but may not be readable. Check file permissions.', 'compilekit' );
 	}
+
+	// PHASE 2: install NPM Modules (fallback) //
+	$output = [];
+	exec( 'node --version 2>&1', $output, $exit_code );
+	if ( $exit_code !== 0 ) {
+		return __( 'Node.js is not installed or not available in PATH.', 'compilekit' );
+	}
+
+	// Create package.json if missing
+	$package_json = $base_dir . 'package.json';
+	if ( ! $wp_filesystem->exists( $package_json ) ) {
+		$package_content = json_encode( [
+				'name'         		=> 'compilekit-tailwind',
+				'version'      		=> '1.0.0',
+				'private' 				=> true,
+				'license'					=> 'ISC',
+				'devDependencies' => [],
+		], JSON_THROW_ON_ERROR | JSON_PRETTY_PRINT );
+		$wp_filesystem->put_contents( $package_json, $package_content );
+	}
+
+	$old_cwd = getcwd();
+	if ( $old_cwd === false ) {
+		return __( 'Failed to get current directory.', 'compilekit' ) ;
+	}
+
+	// Change to the CompileKit directory and install NPM
+	if ( ! chdir( $base_dir ) ) {
+		return __( 'Failed to change to CompileKit directory.', 'compilekit' );
+	}
+
+	// run NPM install
+	$exec_output = [];
+	$install_cmd = 'npm install -D tailwindcss @tailwindcss/cli @tailwindcss/forms tailwind-clamp 2>&1';
+	exec( $install_cmd, $exec_output, $install_exit_code );
+
+	// Restore original directory
+	chdir( $old_cwd );
 
 	return $force
 			? __( 'Tailwind Standalone CLI was successfully reinstalled.', 'compilekit' )
@@ -208,8 +252,11 @@ function compilekit_run_compiler() {
 	$flags  = get_option( 'compilekit_additional_flags', '--minify' );
 
 	if ( ! $input || ! $output ) {
-		$missing = ! $input ? 'Input path' : 'Output path';
-		echo wp_kses_post( compilekit_compiler_admin_notice( __( "$missing not set.", 'compilekit' ) ) );
+		$missing = ! $input ? __( 'Input path', 'compilekit' ) : __( 'Output path', 'compilekit' );
+		echo wp_kses_post( compilekit_compiler_admin_notice( sprintf(
+				/* translators: %s: Type of path */
+						__( '%s not set.', 'compilekit' ), $missing )
+		) );
 		return;
 	}
 
@@ -252,18 +299,45 @@ function compilekit_run_compiler() {
 	set_transient( 'compilekit_compile_notice', $exit_code, 30 );
 
 	if ( $exit_code === 0 ) {
+
 		$success_notice = __( 'Tailwind CLI compiled styles successfully!', 'compilekit' );
 		set_transient( 'compilekit_compile_notice', $success_notice, 30 );
 		echo wp_kses_post( compilekit_compiler_admin_notice( $success_notice, 'success' ) );
-	}
-	else {
-		$error_notice = sprintf(
-		/* translators: %s: list of errors */
-				__( 'Compilation failed: %s', 'compilekit' ),
-				implode( ' | ', array_map( 'esc_html', $output_lines ) )
-		);
-		set_transient( 'compilekit_compile_notice', $error_notice, 30 );
-		echo wp_kses_post( compilekit_compiler_admin_notice( $error_notice ) );
+
+	} else {
+		// Fallback to npx @tailwindcss/cli
+		$bin_dir 						= dirname( $binary );
+		$node_modules_path 	= trailingslashit( $bin_dir ) . 'node_modules';
+		$env 								= 'NODE_PATH=' . escapeshellarg($node_modules_path) . ' ';
+
+		$fallback_cmd = $env . 'npx @tailwindcss/cli' .
+										' --input ' . escapeshellarg( $input_path ) .
+										' --output ' . escapeshellarg( $output_path ) .
+										' --cwd ' . escapeshellarg( $cwd ) .
+										' ' . escapeshellarg( $flags ) . ' 2>&1';
+		$output_lines = [];
+
+		exec( $fallback_cmd, $output_lines, $exit_code );
+
+		set_transient( 'compilekit_compile_notice', $exit_code, 30 );
+
+		if ( $exit_code === 0 ) {
+
+			$success_notice = __( 'Tailwind CLI compiled styles successfully!', 'compilekit' );
+			set_transient( 'compilekit_compile_notice', $success_notice, 30 );
+			echo wp_kses_post( compilekit_compiler_admin_notice( $success_notice, 'success' ) );
+
+		} else {
+			$error_notice = sprintf(
+			/* translators: %s: list of errors */
+					__( 'Compilation failed: %1$s (exit code %2$s)', 'compilekit' ),
+					implode( ' | ', array_map( 'esc_html', $output_lines ) ),
+					$exit_code,
+			);
+			set_transient( 'compilekit_compile_notice', $error_notice, 30 );
+			echo wp_kses_post( compilekit_compiler_admin_notice( $error_notice ) );
+
+		}
 	}
 
 }
@@ -378,7 +452,7 @@ function compilekit_render_page() {
 	}
 
 	if ( $compile_on_reload ) {
-		echo '<div class="notice notice-warning"><p>' . esc_html__( 'Warning: Compile on reload is enabled. Make sure to disable it when done.', 'compilekit' ) . '</p></div>';
+		echo '<div class="notice notice-warning"><p>' . esc_html__( 'Warning: Compile on reload is enabled. Make sure to DISABLE it when done!', 'compilekit' ) . '</p></div>';
 	}
 	?>
 	<div class="wrap">
@@ -441,7 +515,16 @@ function compilekit_render_page() {
 						</td>
 					</tr>
 					<tr>
-						<th scope="row"><?php esc_html_e('Always Recompile', 'compilekit') ?></th>
+						<th scope="row" style="white-space: nowrap">
+							<?php
+							echo wp_kses_post( sprintf(
+							/* translators: %1$s is the main label, %2$s is the additional context in parentheses */
+									__( '%1$s <span style="font-weight: normal">%2$s</span>', 'compilekit' ),
+									esc_html( 'Always Recompile' ),
+									esc_html( '(use with caution)' )
+							) );
+							?>
+						</th>
 						<td><label><input type="checkbox" name="compilekit_compile_on_reload" <?php checked($compile_on_reload); ?>>
 								<?php esc_html_e('Run Tailwind CLI compiler on every page reload', 'compilekit') ?></label></td>
 					</tr>
@@ -563,60 +646,88 @@ function compilekit_render_updates_page() {
  * @return array
  */
 function compilekit_check_version( $binary ) {
-	global $wp_filesystem;
-
-	if ( ! function_exists( 'WP_Filesystem' ) ) {
-		require_once ABSPATH . 'wp-admin/includes/file.php';
-	}
-	WP_Filesystem();
-
 	$notice = $current_version = $latest_version = '';
 
-	// Step 1: Check current version
-	if ( $wp_filesystem->is_file( $binary ) && $wp_filesystem->is_readable( $binary ) ) {
-		// run compiler command
-		$cwd = get_stylesheet_directory();
-		$cmd = escapeshellarg( $binary ) .
-					 ' --cwd ' . escapeshellarg( $cwd ) .
-					 ' --version 2>&1';
-		$output_lines = [];
+	if ( ! function_exists( 'exec' ) ) {
+		return [
+				'notices' 				=> __( 'PHP exec function not exists or disabled.', 'compilekit' ),
+				'current_version' => $current_version,
+				'latest_version' 	=> $latest_version,
+		];
+	}
 
-		if ( function_exists( 'exec' ) ) {
-			exec( $cmd, $output_lines, $exit_code );
+	// Step 1: Check current version
+	if ( compilekit_cli_exists() ) {
+
+		// ATTEMPT 1: Try to get version from Binary
+		$output_lines = [];
+		$cwd 					= get_stylesheet_directory();
+		$cmd 					= escapeshellarg( $binary ) . ' --cwd ' . escapeshellarg( $cwd ) . ' --version 2>&1';
+		exec( $cmd, $output_lines, $exit_code );
+
+		if ( $exit_code !== 0 ) {
+			// ATTEMPT 2: First command failed, try fallback.
+			$old_cwd = getcwd();
+			if ( $old_cwd === false ) {
+				$notice = __( 'Failed to get current directory.', 'compilekit' );
+				return [
+						'notices' 				=> $notice,
+						'current_version' => 'N/A',
+						'latest_version' 	=> 'N/A',
+				];
+			}
+
+			$bin_dir = dirname( $binary );
+
+			if ( ! chdir( $bin_dir ) ) {
+				// Restore original directory
+				chdir( $old_cwd );
+
+				$notice = __( 'Failed to change to NPM directory for version check.', 'compilekit' );
+				return [
+						'notices' 				=> $notice,
+						'current_version' => 'N/A',
+						'latest_version' 	=> 'N/A',
+				];
+			}
+
+			$output_lines = []; // reset before fallback
+			$fallback_cmd	= 'npx @tailwindcss/cli --version 2>&1';
+			exec( $fallback_cmd, $output_lines, $exit_code );
+
+			// Restore directory
+			chdir( $old_cwd );
 
 			if ( $exit_code !== 0 ) {
-				// Handle specific exit codes
 				if ( $exit_code === 134 ) {
 					$error_notice = sprintf(
 					/* translators: %d: exit code */
 							__( 'Binary compatibility error (exit code %d). Try reinstalling the CLI for your system architecture.', 'compilekit' ),
 							$exit_code
 					);
-				}
-				elseif ( $exit_code === 127 ) {
+				} elseif ( $exit_code === 127 ) {
 					$error_notice = __( 'Binary not found or not executable.', 'compilekit' );
-				}
-				else {
+				} else {
 					$error_notice = sprintf(
-					/* translators: %1$d: exit code, %2$s: error output */
-							__( 'Command failed with exit code %1$d: %2$s', 'compilekit' ),
+					/* translators: %1$d: exit code, %2$s: output lines */
+							__( 'Both primary and fallback commands failed. Last exit code %1$d: %2$s', 'compilekit' ),
 							$exit_code,
 							implode( ' | ', $output_lines )
 					);
 				}
-
 				$notice = $error_notice;
-
 			} else {
-				$notice = __( 'Successfully fetched Tailwind CLI version info.', 'compilekit' );
+				$notice = __( 'Fallback command succeeded. Successfully fetched the latest version.', 'compilekit' );
+				if ( ! empty( $output_lines[0] ) ) {
+					$current_version = sanitize_text_field( $output_lines[0] );
+				}
 			}
 
 		} else {
-			$notice = __( 'PHP exec function not exists or disabled.', 'compilekit' );
-		}
-
-		if ( ! empty( $output_lines[0] ) ) {
-			$current_version = sanitize_text_field( $output_lines[0] );
+			$notice = __( 'Successfully fetched Tailwind CLI version info.', 'compilekit' );
+			if ( ! empty( $output_lines[0] ) ) {
+				$current_version = sanitize_text_field( $output_lines[0] );
+			}
 		}
 
 	}
