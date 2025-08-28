@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name: CompileKit for Tailwind CSS
- * Description: Integrates Tailwind CSS with WordPress via NPM for streamlined builds and asset compilation.
+ * Description: Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.
  * Version: 2.1.3
  * Author: Denis Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
