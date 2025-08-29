@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CompileKit for Tailwind CSS
  * Description: Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.
- * Version: 2.1.3
+ * Version: 2.1.4
  * Author: Denis Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
  * Plugin URI: https://github.com/DenisStetsenko/compilekit
@@ -149,7 +149,10 @@ function compilekit_download_tailwind_cli( $force = false ) {
 
 	// PHASE 2: install NPM Modules (fallback) //
 	$output = [];
+	putenv( 'PATH=/usr/local/bin:' . getenv( 'PATH' ) );
+
 	exec( 'node --version 2>&1', $output, $exit_code );
+
 	if ( $exit_code !== 0 ) {
 		return __( 'Node.js is not installed or not available in PATH.', 'compilekit' );
 	}
@@ -308,9 +311,11 @@ function compilekit_run_compiler() {
 		// Fallback to npx @tailwindcss/cli
 		$bin_dir 						= dirname( $binary );
 		$node_modules_path 	= trailingslashit( $bin_dir ) . 'node_modules';
-		$env 								= 'NODE_PATH=' . escapeshellarg($node_modules_path) . ' ';
 
-		$fallback_cmd = $env . 'npx @tailwindcss/cli' .
+		// Set NODE_PATH for this process
+		putenv('NODE_PATH=' . $node_modules_path);
+
+		$fallback_cmd = 'npx @tailwindcss/cli' .
 										' --input ' . escapeshellarg( $input_path ) .
 										' --output ' . escapeshellarg( $output_path ) .
 										' --cwd ' . escapeshellarg( $cwd ) .
