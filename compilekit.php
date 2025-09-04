@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CompileKit for Tailwind CSS
  * Description: Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.
- * Version: 2.1.4
+ * Version: 2.1.5
  * Author: Denis Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
  * Plugin URI: https://github.com/DenisStetsenko/compilekit
@@ -182,7 +182,7 @@ function compilekit_download_tailwind_cli( $force = false ) {
 
 	// run NPM install
 	$exec_output = [];
-	$install_cmd = 'npm install -D tailwindcss @tailwindcss/cli @tailwindcss/forms tailwind-clamp 2>&1';
+	$install_cmd = 'npm install -D tailwindcss @tailwindcss/cli @tailwindcss/forms @tailwindcss/typography 2>&1';
 	exec( $install_cmd, $exec_output, $install_exit_code );
 
 	// Restore original directory
