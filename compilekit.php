@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CompileKit for Tailwind CSS
  * Description: Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.
- * Version: 2.1.5
+ * Version: 2.1.6
  * Author: Denis Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
  * Plugin URI: https://github.com/DenisStetsenko/compilekit
@@ -695,10 +695,26 @@ function compilekit_check_version( $binary ) {
 						'latest_version' 	=> 'N/A',
 				];
 			}
-
-			$output_lines = []; // reset before fallback
-			$fallback_cmd	= 'npx @tailwindcss/cli --version 2>&1';
-			exec( $fallback_cmd, $output_lines, $exit_code );
+			
+			$fallback_cmd_v1 = 'npx @tailwindcss/cli --version 2>&1';
+			$fallback_cmd_v2 = 'npm list @tailwindcss/cli --depth=0 2>&1 | grep @tailwindcss/cli';
+			
+			$output_lines = [];
+			exec( $fallback_cmd_v1, $output_lines, $exit_code );
+			
+			if ( $exit_code !== 0 ) {
+				$output_lines = [];
+				exec( $fallback_cmd_v2, $output_lines, $exit_code );
+				
+				// Update return info
+				if ( $exit_code === 0 && ! empty( $output_lines[0] ) ) {
+					if ( preg_match( '/@tailwindcss\/cli@([\d.]+)/', $output_lines[0], $matches ) ) {
+						$output_lines[0] = '≈ tailwindcss v' . $matches[1];
+					} else {
+						$output_lines[0] = 'Version format unknown';
+					}
+				}
+			}
 
 			// Restore directory
 			chdir( $old_cwd );
@@ -722,14 +738,14 @@ function compilekit_check_version( $binary ) {
 				}
 				$notice = $error_notice;
 			} else {
-				$notice = __( 'Fallback command succeeded. Successfully fetched the latest version.', 'compilekit' );
+				$notice = __( 'Successfully fetched the latest version.', 'compilekit' );
 				if ( ! empty( $output_lines[0] ) ) {
 					$current_version = sanitize_text_field( $output_lines[0] );
 				}
 			}
 
 		} else {
-			$notice = __( 'Successfully fetched Tailwind CLI version info.', 'compilekit' );
+			$notice = __( 'Successfully fetched Tailwind Binary version.', 'compilekit' );
 			if ( ! empty( $output_lines[0] ) ) {
 				$current_version = sanitize_text_field( $output_lines[0] );
 			}
