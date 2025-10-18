@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CompileKit for Tailwind CSS
  * Description: Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.
- * Version: 2.1.6
+ * Version: 2.1.7
  * Author: Denis Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
  * Plugin URI: https://github.com/DenisStetsenko/compilekit
@@ -228,8 +228,10 @@ function compilekit_compiler_admin_notice( $message, $type = 'error' ) {
 	if ( ! is_admin() ) {
 		return '';
 	}
-
-	return '<div class="notice notice-'.esc_attr($type).' is-dismissible"><p>' . esc_html( $message ) . '</p></div>';
+	
+	$allowed_tags = array( 'br' => array(), 'strong' => array(), 'em' => array() );
+	
+	return '<div class="notice notice-' . esc_attr($type) . ' is-dismissible"><p>' . wp_kses( $message, $allowed_tags ) . '</p></div>';
 }
 
 
@@ -258,7 +260,7 @@ function compilekit_run_compiler() {
 		$missing = ! $input ? __( 'Input path', 'compilekit' ) : __( 'Output path', 'compilekit' );
 		echo wp_kses_post( compilekit_compiler_admin_notice( sprintf(
 				/* translators: %s: Type of path */
-						__( '%s not set.', 'compilekit' ), $missing )
+				__( '%s not set.', 'compilekit' ), $missing )
 		) );
 		return;
 	}
@@ -281,7 +283,7 @@ function compilekit_run_compiler() {
 
 	if ( ! $wp_filesystem->is_file( $input_path ) ) {
 		echo wp_kses_post( compilekit_compiler_admin_notice( sprintf(
-		/* translators: %s: input filename.css */
+				/* translators: %s: input filename.css */
 				__( 'Tailwind %s file is broken or does not exist.', 'compilekit' ),
 				basename( $input_path )
 		) ) );
@@ -296,19 +298,28 @@ function compilekit_run_compiler() {
 				 ' --cwd ' . escapeshellarg( $cwd ) .
 				 ' ' . escapeshellarg( $flags ) . ' 2>&1';
 	$output_lines = [];
-
+	
 	exec( $cmd, $output_lines, $exit_code );
 
 	set_transient( 'compilekit_compile_notice', $exit_code, 30 );
 
 	if ( $exit_code === 0 ) {
 
-		$success_notice = __( 'Tailwind CLI compiled styles successfully!', 'compilekit' );
+		$success_notice = __( 'Tailwind CSS styles were compiled successfully!', 'compilekit' );
+		
 		set_transient( 'compilekit_compile_notice', $success_notice, 30 );
 		echo wp_kses_post( compilekit_compiler_admin_notice( $success_notice, 'success' ) );
 
 	} else {
-		// Fallback to npx @tailwindcss/cli
+		
+		// Binary Error Message
+		$binary_error = __('Binary compilation failed!', 'compilekit')
+			. '<br>'
+			. implode('<br>', array_map('esc_html', array_filter(array_map('trim', $output_lines))));
+		
+		echo wp_kses_post( compilekit_compiler_admin_notice( $binary_error ) );
+		
+		// CLI compilation faiiled! Fallback to npx @tailwindcss/cli
 		$bin_dir 						= dirname( $binary );
 		$node_modules_path 	= trailingslashit( $bin_dir ) . 'node_modules';
 
@@ -329,19 +340,19 @@ function compilekit_run_compiler() {
 		if ( $exit_code === 0 ) {
 
 			$success_notice = __( 'Tailwind CLI compiled styles successfully!', 'compilekit' );
+			
 			set_transient( 'compilekit_compile_notice', $success_notice, 30 );
 			echo wp_kses_post( compilekit_compiler_admin_notice( $success_notice, 'success' ) );
 
 		} else {
-			$error_notice = sprintf(
-			/* translators: %s: list of errors */
-					__( 'Compilation failed: %1$s (exit code %2$s)', 'compilekit' ),
-					implode( ' | ', array_map( 'esc_html', $output_lines ) ),
-					$exit_code,
-			);
+			
+			$error_notice = __('Node.js compilation failed!', 'compilekit')
+				. '<br>'
+				. implode('<br>', array_map('esc_html', array_filter(array_map('trim', $output_lines))));
+			
 			set_transient( 'compilekit_compile_notice', $error_notice, 30 );
 			echo wp_kses_post( compilekit_compiler_admin_notice( $error_notice ) );
-
+			
 		}
 	}
 
@@ -539,7 +550,7 @@ function compilekit_render_page() {
 			<?php if ( $cli_installed ) : ?>
 				<p class="submit" style="display: flex; align-items: center; gap: 16px;">
 					<?php submit_button( esc_html__( 'Save Settings', 'compilekit' ), 'primary', 'compilekit_save_settings', false ); ?>
-					<?php submit_button( esc_html__( 'Compile CSS Manually', 'compilekit' ), 'secondary', 'compilekit_compile_now', false ); ?>
+					<?php submit_button( esc_html__( 'Run Tailwind CSS Compiler Manually', 'compilekit' ), 'secondary', 'compilekit_compile_now', false ); ?>
 				</p>
 			<?php endif; ?>
 
@@ -618,25 +629,43 @@ function compilekit_render_updates_page() {
 		$current_version = $get_version['current_version'] ?? $na_notice;
 		$latest_version  = $get_version['latest_version']  ?? $na_notice;
 	}
+	
+	// Add Notice to update Tailwind CLI
+	preg_match('/\d+\.\d+\.\d+/', $current_version, $m_current);
+	preg_match('/\d+\.\d+\.\d+/', $latest_version, $m_latest);
+	$current = $m_current[0] ?? '';
+	$latest  = $m_latest[0]  ?? '';
+	
+	$reinstall_cli_text = __('Reinstall Tailwind CLI', 'compilekit' );
+	if ( version_compare($latest, $current) > 0 ) {
+		$reinstall_cli_text = __('Update Tailwind CLI', 'compilekit' );
+		echo '<div class="notice notice-warning"><p>' .
+			sprintf(
+				// Translators: %s is the button label (e.g., "Reinstall CLI").
+				esc_html__( 'Update Available! Click "%s" button to initialize.', 'compilekit' ),
+				esc_html( $reinstall_cli_text )
+			) .
+			'</p></div>';
+	}
 
 	?>
 	<div class="wrap">
-		<h1><?php esc_html_e( 'CompileKit Updates', 'compilekit' ); ?></h1>
+		<h1 style="margin-bottom: 10px;"><?php esc_html_e( 'CompileKit Updates', 'compilekit' ); ?></h1>
 		<form method="post">
 			<?php wp_nonce_field( 'compilekit_update_action' ); ?>
-			<table class="form-table">
+			<table class="form-table widefat">
 				<tr>
-					<th><?php esc_html_e( 'Current Version', 'compilekit' ); ?></th>
-					<td><code><?php echo esc_html( $current_version ?: $na_notice ); ?></code></td>
+					<th style="padding: 20px 15px 15px 20px;"><?php esc_html_e( 'Current Version', 'compilekit' ); ?></th>
+					<td style="padding: 20px 15px 15px 15px;"><code><?php echo esc_html( $current_version ?: $na_notice ); ?></code></td>
 				</tr>
 				<tr>
-					<th><?php esc_html_e( 'Latest Available Version', 'compilekit' ); ?></th>
-					<td><code><?php echo esc_html( $latest_version ?: $na_notice ); ?></code></td>
+					<th style="padding: 15px 15px 20px 20px;"><?php esc_html_e( 'Latest Available Version', 'compilekit' ); ?></th>
+					<td style="padding: 15px 15px 20px 15px;"><code><?php echo esc_html( $latest_version ?: $na_notice ); ?></code></td>
 				</tr>
 			</table>
 			<p class="submit" style="display: flex; align-items: center; gap: 16px;">
 				<?php submit_button( __( 'Check for Updates', 'compilekit' ), 'primary', 'compilekit_check_updates', false ); ?>
-				<?php submit_button( __( 'Reinstall Tailwind CLI', 'compilekit' ), 'secondary', 'compilekit_reinstall_cli', false ); ?>
+				<?php submit_button( $reinstall_cli_text, 'secondary', 'compilekit_reinstall_cli', false ); ?>
 			</p>
 		</form>
 	</div>
@@ -738,14 +767,14 @@ function compilekit_check_version( $binary ) {
 				}
 				$notice = $error_notice;
 			} else {
-				$notice = __( 'Successfully fetched the latest version.', 'compilekit' );
+				$notice = __( 'Successfully fetched the latest version!', 'compilekit' );
 				if ( ! empty( $output_lines[0] ) ) {
 					$current_version = sanitize_text_field( $output_lines[0] );
 				}
 			}
 
 		} else {
-			$notice = __( 'Successfully fetched Tailwind Binary version.', 'compilekit' );
+			$notice = __( 'Successfully fetched Tailwind Binary version!', 'compilekit' );
 			if ( ! empty( $output_lines[0] ) ) {
 				$current_version = sanitize_text_field( $output_lines[0] );
 			}
@@ -788,7 +817,7 @@ function compilekit_check_version( $binary ) {
 			$current_version_raw = '';
 		}
 		if ( version_compare( $current_version_raw, $latest_version_raw, '>=' ) ) {
-			$notice = __( 'You are running the latest Tailwind CSS CLI version. No updates needed. ', 'compilekit' );
+			$notice = __( 'You are running the latest Tailwind CLI version. No updates needed. ', 'compilekit' );
 		}
 	}
 
