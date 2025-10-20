@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CompileKit for Tailwind CSS
  * Description: Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.
- * Version: 2.1.8
+ * Version: 2.1.9
  * Author: Denis Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
  * Plugin URI: https://github.com/DenisStetsenko/compilekit
@@ -294,7 +294,11 @@ function compilekit_run_compiler() {
 		) );
 		return;
 	}
-
+	
+	// Set worker threads for this process
+	$worker_threads = get_option( 'compilekit_worker_threads', 32 );
+	putenv('RAYON_NUM_THREADS=' . $worker_threads);
+	
 	// run compiler command
 	$cwd = get_stylesheet_directory();
 	$cmd = escapeshellarg( $binary ) .
@@ -415,7 +419,7 @@ add_action( 'admin_menu', static function () {
 			'compilekit_render_page',
 			plugin_dir_url( __FILE__ ) . 'assets/icon.png'
 	);
-
+	
 	add_submenu_page(
 			'compilekit',
 			'Updates',
@@ -423,6 +427,15 @@ add_action( 'admin_menu', static function () {
 			'manage_options',
 			'compilekit-updates',
 			'compilekit_render_updates_page'
+	);
+	
+	add_submenu_page(
+			'compilekit',
+			'Settings',
+			'Settings',
+			'manage_options',
+			'compilekit-settings',
+			'compilekit_render_settings_page'
 	);
 
 } );
@@ -488,7 +501,7 @@ function compilekit_render_page() {
 	}
 	?>
 	<div class="wrap">
-		<h1><?php esc_html_e('CompileKit Settings', 'compilekit') ?></h1>
+		<h1><?php esc_html_e('CompileKit Setup', 'compilekit') ?></h1>
 		<p><?php esc_html_e('Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.', 'compilekit') ?></p>
 
 		<form method="post">
@@ -572,6 +585,58 @@ function compilekit_render_page() {
 
 		</form>
 
+	</div>
+	<?php
+}
+
+
+/**
+ * Sub page for updates
+ * @return void
+ */
+function compilekit_render_settings_page() {
+	
+	if ( isset( $_POST['compilekit_save_settings'] ) ) {
+		if ( ! current_user_can( 'manage_options' ) ) {
+			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'compilekit' ) );
+		}
+		
+		check_admin_referer( 'compilekit_save_settings_action' );
+		
+		$input_worker_threads = max( 1, isset( $_POST['compilekit_worker_threads'] ) ? absint( $_POST['compilekit_worker_threads'] ) : 32 );
+		update_option( 'compilekit_worker_threads', $input_worker_threads );
+		
+		echo '<div class="notice notice-success"><p>' . esc_html__( 'Settings saved.', 'compilekit' ) . '</p></div>';
+	}
+	
+	// Get the saved value or use default
+	$input_worker_threads = get_option( 'compilekit_worker_threads', 32 );
+	?>
+	<div class="wrap">
+		<h1 style="margin-bottom: 10px;"><?php esc_html_e( 'System Settings', 'compilekit' ); ?></h1>
+		<form method="post">
+			<?php wp_nonce_field( 'compilekit_save_settings_action' ); ?>
+			<table class="form-table widefat">
+				<tr>
+					<th style="padding: 20px 15px 15px 20px;">
+						<?php esc_html_e( 'Worker Threads', 'compilekit' ); ?>
+						<p class="description">
+							<small><?php esc_html_e('Default: 32', 'compilekit'); ?></small>
+						</p>
+					</th>
+					<td style="padding: 20px 15px 15px 15px;">
+						<input type="number" min="1" max="64" name="compilekit_worker_threads" id="compilekit_worker_threads" value="<?php echo esc_attr($input_worker_threads); ?>"
+									 placeholder="32" required>
+						<p class="description">
+							<?php esc_html_e( 'Number of parallel threads for Tailwind compilation. Lower this value if you experience compilation errors.', 'compilekit' ); ?>
+						</p>
+					</td>
+				</tr>
+			</table>
+			<p class="submit" style="display: flex; align-items: center; gap: 16px;">
+				<?php submit_button( __( 'Save Settings', 'compilekit' ), 'primary', 'compilekit_save_settings', false ); ?>
+			</p>
+		</form>
 	</div>
 	<?php
 }
