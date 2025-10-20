@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CompileKit for Tailwind CSS
  * Description: Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.
- * Version: 2.1.7
+ * Version: 2.1.8
  * Author: Denis Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
  * Plugin URI: https://github.com/DenisStetsenko/compilekit
@@ -92,7 +92,7 @@ function compilekit_download_tailwind_cli( $force = false ) {
 	$rate_limit     = isset($headers['x-ratelimit-limit']) ? (int) $headers['x-ratelimit-limit'] : null;
 	$rate_reset     = isset($headers['x-ratelimit-reset']) ? gmdate('F j, Y H:i:s', (int) $headers['x-ratelimit-reset']) : null;
 
-	$delete_temp_file = function() use ( $wp_filesystem, $temp_file ) {
+	$delete_temp_file = static function() use ( $wp_filesystem, $temp_file ) {
 		if ( $wp_filesystem->exists( $temp_file ) ) {
 			$wp_filesystem->delete( $temp_file );
 		}
@@ -248,7 +248,8 @@ function compilekit_run_compiler() {
 	WP_Filesystem();
 
 	if ( ! function_exists( 'exec' ) ) {
-		echo wp_kses_post( compilekit_compiler_admin_notice( __( 'PHP exec() function not available or disabled.', 'compilekit' ) ) );
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- compilekit_compiler_admin_notice handles escaping internally
+		echo compilekit_compiler_admin_notice( __( 'PHP exec() function not available or disabled.', 'compilekit' ) );
 		return;
 	}
 
@@ -258,10 +259,11 @@ function compilekit_run_compiler() {
 
 	if ( ! $input || ! $output ) {
 		$missing = ! $input ? __( 'Input path', 'compilekit' ) : __( 'Output path', 'compilekit' );
-		echo wp_kses_post( compilekit_compiler_admin_notice( sprintf(
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- compilekit_compiler_admin_notice handles escaping internally
+		echo compilekit_compiler_admin_notice( sprintf(
 				/* translators: %s: Type of path */
 				__( '%s not set.', 'compilekit' ), $missing )
-		) );
+		);
 		return;
 	}
 
@@ -270,23 +272,26 @@ function compilekit_run_compiler() {
 	$output_path = $theme_dir . '/' . ltrim( trim( $output ), '/' );
 
 	if ( ! $input_path || ! str_starts_with( $input_path, realpath( $theme_dir ) ) ) {
-		echo wp_kses_post( compilekit_compiler_admin_notice( __( 'Invalid input path.', 'compilekit' ) ) );
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- compilekit_compiler_admin_notice handles escaping internally
+		echo compilekit_compiler_admin_notice( __( 'Invalid input path.', 'compilekit' ) );
 		return;
 	}
 
 	$binary = compilekit_get_binary_path();
 
 	if ( ! $wp_filesystem->is_file( $binary ) || ! $wp_filesystem->is_readable( $binary ) ) {
-		echo wp_kses_post( compilekit_compiler_admin_notice( __( 'Tailwind binary file not exists or not executable.', 'compilekit' ) ) );
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- compilekit_compiler_admin_notice handles escaping internally
+		echo compilekit_compiler_admin_notice( __( 'Tailwind binary file not exists or not executable.', 'compilekit' ) );
 		return;
 	}
 
 	if ( ! $wp_filesystem->is_file( $input_path ) ) {
-		echo wp_kses_post( compilekit_compiler_admin_notice( sprintf(
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- compilekit_compiler_admin_notice handles escaping internally
+		echo compilekit_compiler_admin_notice( sprintf(
 				/* translators: %s: input filename.css */
 				__( 'Tailwind %s file is broken or does not exist.', 'compilekit' ),
 				basename( $input_path )
-		) ) );
+		) );
 		return;
 	}
 
@@ -306,21 +311,16 @@ function compilekit_run_compiler() {
 	if ( $exit_code === 0 ) {
 
 		$success_notice = __( 'Tailwind CSS styles were compiled successfully!', 'compilekit' );
-		
 		set_transient( 'compilekit_compile_notice', $success_notice, 30 );
-		echo wp_kses_post( compilekit_compiler_admin_notice( $success_notice, 'success' ) );
+		
+		// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- compilekit_compiler_admin_notice handles escaping internally
+		echo compilekit_compiler_admin_notice( $success_notice, 'success' );
 
 	} else {
 		
-		// Binary Error Message
-		$binary_error = __('Binary compilation failed!', 'compilekit')
-			. '<br>'
-			. implode('<br>', array_map('esc_html', array_filter(array_map('trim', $output_lines))));
-		
-		echo wp_kses_post( compilekit_compiler_admin_notice( $binary_error ) );
-		
-		// CLI compilation faiiled! Fallback to npx @tailwindcss/cli
+		// CLI compilation failed! Fallback to npx @tailwindcss/cli
 		$bin_dir 						= dirname( $binary );
+		$bin_output_lines		= $output_lines;
 		$node_modules_path 	= trailingslashit( $bin_dir ) . 'node_modules';
 
 		// Set NODE_PATH for this process
@@ -340,18 +340,34 @@ function compilekit_run_compiler() {
 		if ( $exit_code === 0 ) {
 
 			$success_notice = __( 'Tailwind CLI compiled styles successfully!', 'compilekit' );
-			
 			set_transient( 'compilekit_compile_notice', $success_notice, 30 );
-			echo wp_kses_post( compilekit_compiler_admin_notice( $success_notice, 'success' ) );
+			
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- compilekit_compiler_admin_notice handles escaping internally
+			echo compilekit_compiler_admin_notice( $success_notice, 'success' );
 
 		} else {
 			
-			$error_notice = __('Node.js compilation failed!', 'compilekit')
-				. '<br>'
-				. implode('<br>', array_map('esc_html', array_filter(array_map('trim', $output_lines))));
+			// Both failed - show both error sets
+			$cli_errors  = array_filter( array_map( 'trim', $bin_output_lines ) );
+			$node_errors = array_filter( array_map( 'trim', $output_lines ) );
 			
-			set_transient( 'compilekit_compile_notice', $error_notice, 30 );
-			echo wp_kses_post( compilekit_compiler_admin_notice( $error_notice ) );
+			$error_parts = [];
+			
+			if ( ! empty( $cli_errors ) ) {
+				$error_parts[] = '<strong>' . esc_html__( 'Tailwind CLI compilation failed!', 'compilekit' ) . '</strong><br>'
+					. implode( '<br>', array_map( 'esc_html', $cli_errors ) );
+			}
+			
+			if ( ! empty( $node_errors ) ) {
+				$error_parts[] = '<strong>' . esc_html__( 'Node.js compilation failed!', 'compilekit' ) . '</strong><br>'
+					. implode( '<br>', array_map( 'esc_html', $node_errors ) );
+			}
+			
+			$combined_error = implode( '<br><br>', $error_parts );
+			set_transient( 'compilekit_compile_notice', $combined_error, 30 );
+			
+			// phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- compilekit_compiler_admin_notice handles escaping internally
+			echo compilekit_compiler_admin_notice( $combined_error );
 			
 		}
 	}
@@ -363,7 +379,7 @@ function compilekit_run_compiler() {
  * Actions on init()
  * This runs exec() command on every frontend page load when enabled - should only be used during development, not production.
  */
-add_action('init', function () {
+add_action('init', static function () {
 	// 1. Compile styles on front end page reload.
 	if ( is_admin() ) {
 		return;
@@ -389,7 +405,7 @@ add_action('init', function () {
  * Render wp-admin menu page
  * @return void
  */
-add_action( 'admin_menu', function () {
+add_action( 'admin_menu', static function () {
 
 	add_menu_page(
 			'CompileKit',
@@ -478,19 +494,14 @@ function compilekit_render_page() {
 		<form method="post">
 			<?php wp_nonce_field('compilekit_settings_action'); ?>
 			<table class="form-table">
-				<?php if ( ! $cli_installed ) : ?>
-					<h3><?php esc_html_e('Step 1:', 'compilekit') ?>
-						<span style="font-weight: 400"><?php esc_html_e('Download Tailwind CSS CLI binary', 'compilekit') ?></span>
-					</h3>
-					<?php submit_button( esc_html__( 'Download Tailwind CLI', 'compilekit' ), 'primary', 'compilekit_download_cli' ); ?>
-				<?php else : ?>
+				<?php if ( $cli_installed ) : ?>
 					<tr>
 						<th scope="row">
-							<label for="compilekit_input" style="white-space: nowrap">
+							<label for="compilekit_input" style="white-space: nowrap;">
 								<?php
 								echo wp_kses_post( sprintf(
 								/* translators: %1$s is the main label, %2$s is the additional context in parentheses */
-										__( '%1$s <span style="font-weight: normal">%2$s</span>', 'compilekit' ),
+										__( '%1$s <span style="font-weight: normal;">%2$s</span>', 'compilekit' ),
 										esc_html( 'Input CSS Path' ),
 										esc_html( '(relative to theme)' )
 								) );
@@ -502,11 +513,11 @@ function compilekit_render_page() {
 					</tr>
 					<tr>
 						<th scope="row">
-							<label for="compilekit_output" style="white-space: nowrap">
+							<label for="compilekit_output" style="white-space: nowrap;">
 								<?php
 								echo wp_kses_post( sprintf(
 								/* translators: %1$s is the main label, %2$s is the additional context in parentheses */
-										__( '%1$s <span style="font-weight: normal">%2$s</span>', 'compilekit' ),
+										__( '%1$s <span style="font-weight: normal;">%2$s</span>', 'compilekit' ),
 										esc_html( 'Output CSS Path' ),
 										esc_html( '(relative to theme)' )
 								) );
@@ -523,7 +534,7 @@ function compilekit_render_page() {
 								<input type="radio" name="compilekit_flags" value="--minify" <?php checked($flags, '--minify'); ?>>
 								<?php esc_html_e('Compressed', 'compilekit') ?>
 							</label>
-							<span style="padding: 0 10px"></span>
+							<span style="padding: 0 10px;"></span>
 							<label>
 								<input type="radio" name="compilekit_flags" value="--optimize" <?php checked($flags, '--optimize'); ?>>
 								<?php esc_html_e('Expanded', 'compilekit') ?>
@@ -531,11 +542,11 @@ function compilekit_render_page() {
 						</td>
 					</tr>
 					<tr>
-						<th scope="row" style="white-space: nowrap">
+						<th scope="row" style="white-space: nowrap;">
 							<?php
 							echo wp_kses_post( sprintf(
 							/* translators: %1$s is the main label, %2$s is the additional context in parentheses */
-									__( '%1$s <span style="font-weight: normal">%2$s</span>', 'compilekit' ),
+									__( '%1$s <span style="font-weight: normal;">%2$s</span>', 'compilekit' ),
 									esc_html( 'Always Recompile' ),
 									esc_html( '(use with caution)' )
 							) );
@@ -544,6 +555,11 @@ function compilekit_render_page() {
 						<td><label><input type="checkbox" name="compilekit_compile_on_reload" <?php checked($compile_on_reload); ?>>
 								<?php esc_html_e('Run Tailwind CLI compiler on every page reload', 'compilekit') ?></label></td>
 					</tr>
+				<?php else : ?>
+					<h3><?php esc_html_e('Step 1:', 'compilekit') ?>
+						<span style="font-weight: 400;"><?php esc_html_e('Download Tailwind CSS CLI binary', 'compilekit') ?></span>
+					</h3>
+					<?php submit_button( esc_html__( 'Download Tailwind CLI', 'compilekit' ), 'primary', 'compilekit_download_cli' ); ?>
 				<?php endif; ?>
 			</table>
 
@@ -577,16 +593,15 @@ function compilekit_render_updates_page() {
 	$latest_version  	= get_transient( 'compilekit_latest_version' );
 	$na_notice				= __( 'Not available', 'compilekit' );
 
-	if ( false === $current_version ) {
+	if ( $current_version === false) {
 		$current_version = $na_notice;
 	}
-	if ( false === $latest_version ) {
+	if ( $latest_version === false) {
 		$latest_version = $na_notice;
 	}
 
-	$binary 			= compilekit_get_binary_path();
-	$get_version 	= [];
-
+	$binary = compilekit_get_binary_path();
+	
 	if ( isset( $_POST['compilekit_check_updates'] ) ) {
 		if ( ! current_user_can( 'manage_options' ) ) {
 			wp_die( esc_html__( 'You do not have sufficient permissions to access this page.', 'compilekit' ) );
@@ -680,8 +695,10 @@ function compilekit_render_updates_page() {
  * @return array
  */
 function compilekit_check_version( $binary ) {
-	$notice = $current_version = $latest_version = '';
-
+	$latest_version = '';
+	$current_version = '';
+	$notice = '';
+	
 	if ( ! function_exists( 'exec' ) ) {
 		return [
 				'notices' 				=> __( 'PHP exec function not exists or disabled.', 'compilekit' ),
@@ -835,7 +852,7 @@ function compilekit_check_version( $binary ) {
 /**
  * Display notification on admin bar when compile on reload is enabled
  */
-add_action( 'admin_bar_menu', function ( $wp_admin_bar ) {
+add_action( 'admin_bar_menu', static function ($wp_admin_bar ) {
 	if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) || is_admin() ) {
 		return;
 	}
