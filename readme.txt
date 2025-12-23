@@ -2,9 +2,9 @@
 Contributors: mstrdh
 Tags: theme, tailwind, css, cli
 Requires at least: 6.0
-Tested up to: 6.8
+Tested up to: 6.9
 Requires PHP: 8.0
-Stable tag: 2.1.9
+Stable tag: 2.2.0
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -29,6 +29,9 @@ HTTP request to GitHub's public API with user-agent "WordPress/compilekit" happe
 Learn more about [privacy policy](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) and [terms of service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service).
 
 == Changelog ==
+
+= 2.2.0 =
+* Minor updates
 
 = 2.1.9 =
 * Release Date: 20 October 2025

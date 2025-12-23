@@ -2,14 +2,14 @@
 /**
  * Plugin Name: CompileKit for Tailwind CSS
  * Description: Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.
- * Version: 2.1.9
+ * Version: 2.2.0
  * Author: Denis Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
  * Plugin URI: https://github.com/DenisStetsenko/compilekit
  * License: GPLv2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
  * Requires at least: 6.0
- * Tested up to: 6.8
+ * Tested up to: 6.9
  * Requires PHP: 8.0
  * Text Domain: compilekit
  */
@@ -884,7 +884,7 @@ function compilekit_check_version( $binary ) {
 						gmdate( 'M j, Y', strtotime( $body['published_at'] ) )
 				);
 			}
-		} catch ( JsonException ) {
+		} catch ( JsonException $e ) {
 			$latest_version = __( 'Failed to parse latest version data.', 'compilekit' );
 		}
 	} else {
@@ -943,6 +943,7 @@ add_action( 'admin_bar_menu', static function ($wp_admin_bar ) {
 	$wp_admin_bar->add_node( [
 			'id'    => 'ck-compile-status',
 			'title' => $title,
+			'href'  => esc_url( admin_url( 'admin.php?page=compilekit' ) ),
 			'meta'  => [
 					'class' => 'ck-compile-status',
 					'style' => 'color:#fff; font-weight: 600;'
