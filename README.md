@@ -1,12 +1,15 @@
-# CompileKit for Tailwind CSS
+# CompileKit – Tailwind CSS compiler for WordPress
 
-Integrates Tailwind CSS Standalone CLI with WordPress for streamlined builds and asset compilation.
- 
-- Integrates Tailwind CSS Standalone CLI directly with WordPress.
-- Based on [Standalone CLI](https://tailwindcss.com/blog/standalone-cli)
-- Option to compile on every page reload or manually.
-- Configure input/output paths and CLI flags.
-- Fully local. No Node.js or npm required.
-- Not compatible with Windows or shared hosting without CLI access  
+Compile Tailwind CSS with a server-side compiler. Provides an admin UI, auto-compilation mode, and environment-aware output.
 
-Flags supported: `--minify, --optimize`  
+## Features
+
+- Compiles Tailwind CSS v4 directly on the server.
+- Choose a compiler: Standalone CLI binary or Node.js (npm) packages.
+- Compile manually from the admin UI or enable Auto-Compilation Mode to rebuild on each front-end page refresh.
+- Configure input/output CSS paths inside the active theme.
+- Environment-aware output: Local/Staging builds are unminified (optionally with source maps), Live builds are minified for performance.
+
+## Notes
+
+- **Auto-Compilation Mode** is intended for development. **Disable** it when finished editing!

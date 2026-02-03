@@ -1,0 +1,11 @@
+# Directories and files to omit from the wordpress.org svn repo
+.git/
+.github/
+.vscode/
+.idea/
+node_modules/
+.DS_Store
+.prettierignore
+.prettierrc
+*.log
+gulpfile.js

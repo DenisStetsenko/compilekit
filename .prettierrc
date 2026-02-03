@@ -1,0 +1,40 @@
+{
+  "plugins": [
+    "prettier-plugin-css-order",
+    "prettier-plugin-tailwindcss",
+    "@ttskch/prettier-plugin-tailwindcss-anywhere",
+    "prettier-plugin-organize-attributes",
+    "prettier-plugin-classnames",
+    "prettier-plugin-merge"
+  ],
+  "overrides": [
+    {
+      "files": "*.php",
+      "options": {
+        "parser": "anywhere"
+      }
+    }
+  ],
+  "tailwindStylesheet": "./assets/css/input.css",
+  "tailwindPreserveWhitespace": true,
+  "cssDeclarationSorterOrder": "smacss",
+  "cssDeclarationSorterKeepOverrides": true,
+  "printWidth": 140,
+  "tabWidth": 2,
+  "semi": true,
+  "trailingComma": "es5",
+  "useTabs": false,
+  "bracketSpacing": true,
+  "bracketSameLine": true,
+  "endingPosition": "relative",
+  "objectWrap": "collapse",
+  "attributeGroups": [
+    "^id$",
+    "^x-",
+    "^:",
+    "^class$",
+    "^name$",
+    "$DEFAULT",
+    "^aria-"
+  ]
+}

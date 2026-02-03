@@ -1,0 +1,11 @@
+# Ignore build output
+assets/css/output.css
+
+# Ignore WordPress system files (relative path from theme)
+../../wp-admin/
+../../wp-includes/
+
+# Optional: Ignore vendor folders, backups, logs
+*.log
+*.zip
+.DS_Store

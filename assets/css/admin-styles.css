@@ -1,0 +1,176 @@
+body {
+  color: var(--color-base-content);
+  background-color: var(--root-bg);
+}
+#wpbody-content,
+#wpcontent {
+  padding: 0;
+}
+
+/* Typography */
+#compilekit-admin-settings{
+  font-family: var(--font-inter), sans-serif;
+  max-width: 2000px;
+}
+#compilekit-admin-settings p{
+  margin-top: 0;
+  font-size: 1em;
+  line-height: 1.45;
+}
+.notice{
+  margin: 20px 24px 0 24px;
+}
+.notice p{
+  margin: 0.5em 0;
+  padding: 4px;
+  font-size: 15px;
+}
+.notice p strong{
+  font-weight: 500;
+}
+
+/* Buttons */
+#compilekit-admin-settings .button.btn{
+  --size: calc(var(--size-field, 0.25rem) * 10);
+  --btn-bg: var(--btn-color, var(--color-base-200));
+  --btn-p: 1rem;
+  --btn-border: var(--btn-bg);
+  display: inline-flex;
+  margin: 0;
+  padding-inline: var(--btn-p);
+  border-width: var(--border);
+  border-style: solid;
+  border-color: var(--btn-border);
+  border-start-start-radius: var(--join-ss, var(--radius-field));
+  border-start-end-radius: var(--join-se, var(--radius-field));
+  border-end-start-radius: var(--join-es, var(--radius-field));
+  border-end-end-radius: var(--join-ee, var(--radius-field));
+  background-image: none, var(--btn-noise);
+  background-size: auto, calc(var(--noise) * 100%);
+  background-color: var(--btn-bg);
+  color: var(--btn-fg);
+  font-weight: var(--btn-font-weight);
+  font-size: var(--fontsize, 0.9375rem);
+  line-height: inherit;
+}
+
+#compilekit-admin-settings .button.btn:focus{
+  outline: none;
+  box-shadow: none;
+}
+
+#compilekit-admin-settings .button.btn:hover{
+  --btn-bg: color-mix(in oklab, var(--btn-color, var(--color-base-200)), #000 7%);
+}
+
+#compilekit-admin-settings .button.btn-primary,
+#compilekit-admin-settings .button.btn-secondary {
+  --btn-fg: var(--color-white);
+}
+
+/* Select */
+#compilekit-admin-settings input.input{
+  border-color: var(--input-color);
+  display: inline-flex;
+  background-color: var(--color-base-100);
+  font-size: 0.9375rem;
+  line-height: normal;
+  border-start-start-radius: var(--join-ss, var(--radius-field));
+  border-start-end-radius: var(--join-se, var(--radius-field));
+  border-end-start-radius: var(--join-es, var(--radius-field));
+  border-end-end-radius: var(--join-ee, var(--radius-field));
+  margin: 0;
+  transition: 200ms ease;
+  max-width: 100%;
+  padding-inline: calc(0.25rem * 3);
+}
+
+#compilekit-admin-settings select.select{
+  border-color: var(--input-color);
+  appearance: none;
+  background-color: var(--color-base-100);
+  font-size: 0.9375rem;
+  line-height: normal;
+  border-start-start-radius: var(--join-ss, var(--radius-field));
+  border-start-end-radius: var(--join-se, var(--radius-field));
+  border-end-start-radius: var(--join-es, var(--radius-field));
+  border-end-end-radius: var(--join-ee, var(--radius-field));
+  background-image: linear-gradient(45deg, #0000 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, #0000 50%);
+  background-position: calc(100% - 20px) calc(1px + 50%), calc(100% - 16.1px) calc(1px + 50%);
+  background-size: 4px 4px, 4px 4px;
+  background-repeat: no-repeat;
+  padding-inline-start: calc(0.25rem * 3);
+  padding-inline-end: calc(0.25rem * 7);
+  width: clamp(3rem, 20rem, 100%);
+  height: var(--size);
+  margin: 0;
+  transition: 200ms ease;
+  max-width: 100%;
+}
+
+#compilekit-admin-settings select.select:hover{
+  color: var(--color-primary-darken);
+}
+#compilekit-admin-settings select.select:focus{
+  color: var(--color-primary-darken);
+  box-shadow: 0 0 0 1px var(--color-primary);
+  outline: none;
+}
+
+/* Radio */
+#compilekit-admin-settings input[type="radio"].radio {
+  border-radius: calc(infinity * 1px);
+  vertical-align: middle;
+  border: var(--border) solid var(--input-color, color-mix(in srgb, currentColor 20%, #0000));
+  box-shadow: 0 1px oklch(0% 0 0 / calc(var(--depth) * 0.1)) inset;
+  --size: calc(var(--size-selector, 0.25rem) * 5);
+  width: var(--size);
+  height: var(--size);
+  padding: calc(0.25rem * 1) !important;
+  color: var(--input-color, currentColor);
+  margin: 0;
+  transition: all 0.3s;
+}
+
+#compilekit-admin-settings input[type="radio"].radio:checked,
+#compilekit-admin-settings input[type="radio"].radio:hover{
+  border-color: currentcolor;
+  background-color: var(--color-base-100);
+}
+
+#compilekit-admin-settings input[type="radio"].radio:checked:before,
+#compilekit-admin-settings input[type="radio"].radio:hover:before{
+  background-color: currentcolor;
+  display: block;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  float: none;
+}
+
+/* Toggle */
+#compilekit-admin-settings input[type="checkbox"].toggle {
+  display: inline-grid;
+  border: var(--border) solid currentColor;
+  color: var(--input-color);
+  -webkit-user-select: none;
+  user-select: none;
+  width: calc((var(--size) * 2) - (var(--border) + var(--toggle-p)) * 2);
+  height: var(--size);
+  margin: 0;
+  padding: var(--toggle-p) !important;
+  border-radius: calc(var(--radius-selector) + min(var(--toggle-p), var(--radius-selector-max)) + min(var(--border), var(--radius-selector-max)));
+  transition: color 0.3s, grid-template-columns 0.2s;
+}
+
+#compilekit-admin-settings input[type="checkbox"].toggle:checked::before{
+  content: '';
+  margin: 0;
+  height: 100%;
+  width: initial;
+  float: none;
+}
+
+#compilekit-admin-settings input[type="checkbox"].toggle:focus {
+  outline: none;
+}
