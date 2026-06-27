@@ -30,7 +30,7 @@ class CompileKit_Environment {
 	 * Retrieves the version of the Tailwind Node.js package from a cached transient.
 	 */
 	public static function get_node_modules_version() : string {
-		$ver = get_transient( 'compilekit_tailwindcss_cli_version' );
+		$ver = get_transient( COMPILEKIT_TRANSIENT_NODE_VERSION );
 		return is_string( $ver ) ? $ver : '';
 	}
 	
@@ -123,14 +123,19 @@ class CompileKit_Environment {
 				);
 			}
 			
-			// Verify npm exists (via process_runner)
-			$npm_check = CompileKit_Helpers::process_runner( 'npm --version' );
-			if ( $npm_check['success'] === false ) {
+			// Verify npm exists (via process_runner).
+			// A working `npm --version` prints a semver (e.g. "10.2.4"). Treat a hard
+			// failure, empty output, or non-version output (e.g. "command not found")
+			// as "npm unavailable" — covers the shell_exec path where exit code is null.
+			$npm_check  = CompileKit_Helpers::process_runner( 'npm --version' );
+			$npm_output = isset( $npm_check['output'] ) ? trim( (string) $npm_check['output'] ) : '';
+
+			if ( $npm_check['success'] === false || $npm_output === '' || ! preg_match( '/\d+\.\d+\.\d+/', $npm_output ) ) {
 				return array(
 					'success' => false,
 					'message' => sprintf( "%s\n%s",
 						__( 'Node.js or npm is not installed, or is not available in PATH.', 'compilekit' ),
-						$npm_check['output']
+						$npm_output
 					));
 			}
 			
@@ -206,7 +211,7 @@ class CompileKit_Environment {
 				// Detect + Save npx version
 				$tailwindcss_ver = self::detect_node_modules_version( $node_modules_dir );
 				if ( $tailwindcss_ver !== '' ) {
-					set_transient( 'compilekit_tailwindcss_cli_version', $tailwindcss_ver );
+					set_transient( COMPILEKIT_TRANSIENT_NODE_VERSION, $tailwindcss_ver );
 				}
 				
 				return array(
@@ -284,7 +289,7 @@ class CompileKit_Environment {
 		
 		if ( $ok ) {
 			// clear persisted version
-			delete_transient( 'compilekit_tailwindcss_cli_version' );
+			delete_transient( COMPILEKIT_TRANSIENT_NODE_VERSION );
 			
 			return array(
 				'success' => true,
@@ -321,7 +326,7 @@ class CompileKit_Environment {
 	 * Retrieves the cached version of the standalone executable CLI, if available.
 	 */
 	public static function get_standalone_executable_cli_version() : string {
-		$ver = get_transient( 'compilekit_standalone_cli_version' );
+		$ver = get_transient( COMPILEKIT_TRANSIENT_CLI_VERSION );
 		return is_string( $ver ) ? $ver : '';
 	}
 	
@@ -552,7 +557,7 @@ class CompileKit_Environment {
 		// Detect + Save binary version
 		$binary_ver = self::detect_standalone_executable_cli_version( $final_path );
 		if ( $binary_ver !== '' ) {
-			set_transient( 'compilekit_standalone_cli_version', $binary_ver );
+			set_transient( COMPILEKIT_TRANSIENT_CLI_VERSION, $binary_ver );
 		}
 		
 		return array(
@@ -608,9 +613,10 @@ class CompileKit_Environment {
 		}
 		
 		if ( $ok ) {
-			// clear persisted binary version
-			delete_transient( 'compilekit_standalone_cli_version' );
-			
+			// clear persisted binary version + cached pre-flight result
+			delete_transient( COMPILEKIT_TRANSIENT_CLI_VERSION );
+			delete_transient( COMPILEKIT_TRANSIENT_PREFLIGHT );
+
 			return array(
 				'success' => true,
 				'message' => __( 'Successfully removed Tailwind Standalone Executable Binary.', 'compilekit' ),

@@ -4,7 +4,7 @@ Tags: theme, tailwind, css, cli, compiler
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.0.1
+Stable tag: 3.0.2
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,6 +31,15 @@ An HTTPS request to GitHub is made only when an admin clicks “Download Tailwin
 
 
 == Changelog ==
+
+= 3.0.2 =
+* Hardened output CSS path validation against parent-directory (..) traversal.
+* More reliable npm detection during package install (now works on hosts with only shell_exec).
+* Removed a redundant Node.js check that ran an extra process on every npm-based build.
+* Cached the Standalone CLI pre-flight check to avoid an extra process on every build.
+* Limited theme CSS scan depth for a faster scan and a cleaner file selector.
+* Prevented a PHP warning when the output stylesheet has not been compiled yet.
+* Improved Auto-Compilation locking to prevent overlapping builds on slow hosts.
 
 = 3.0.1 =
 * Confirmed compatibility with WordPress 7.0.

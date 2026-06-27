@@ -153,6 +153,7 @@ body {
   display: inline-grid;
   border: var(--border) solid currentColor;
   color: var(--input-color);
+	background: transparent;
   -webkit-user-select: none;
   user-select: none;
   width: calc((var(--size) * 2) - (var(--border) + var(--toggle-p)) * 2);
@@ -173,4 +174,5 @@ body {
 
 #compilekit-admin-settings input[type="checkbox"].toggle:focus {
   outline: none;
+	box-shadow: none;
 }

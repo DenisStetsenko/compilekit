@@ -16,9 +16,12 @@ delete_option('compilekit_run_on_refresh');
 delete_option('compilekit_compiler_mode');
 delete_option('compilekit_worker_threads');
 
-// Remove all plugin transients
+// Remove all plugin transients.
+// NOTE: this file runs in a separate process without the plugin's constants,
+// so these literals must stay in sync with COMPILEKIT_TRANSIENT_* in compilekit.php.
 delete_transient( 'compilekit_standalone_cli_version' );
 delete_transient( 'compilekit_tailwindcss_cli_version' );
+delete_transient( 'compilekit_cli_preflight_ok' );
 
 // Initialize WordPress Filesystem API
 global $wp_filesystem;

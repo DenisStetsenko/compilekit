@@ -70,7 +70,16 @@ class CompileKit_Compiler {
 		// Normalize user-provided relative paths.
 		$input_rel  = ltrim( $input_rel, "/\\ \t\n\r\0\x0B" );
 		$output_rel = ltrim( $output_rel, "/\\ \t\n\r\0\x0B" );
-		
+
+		// Reject parent-directory traversal: wp_normalize_path() does not collapse "..".
+		if ( preg_match( '#(^|/)\.\.(/|$)#', str_replace( '\\', '/', $input_rel . "\n" . $output_rel ) ) ) {
+			return array(
+				'success'  => false,
+				'message'  => __( 'CSS paths must not contain parent-directory (..) segments.', 'compilekit' ),
+				'resolved' => array(),
+			);
+		}
+
 		// Build absolute paths.
 		$input_abs  = wp_normalize_path( $theme_root . $input_rel );
 		$output_abs = wp_normalize_path( $theme_root . $output_rel );
@@ -123,7 +132,29 @@ class CompileKit_Compiler {
 				'resolved' => array(),
 			);
 		}
-		
+
+		// Re-verify the resolved directory is inside the theme (catches symlinks / edge cases).
+		$output_dir_real = realpath( $output_dir );
+		if ( $output_dir_real === false || $output_dir_real === '' ) {
+			return array(
+				'success'  => false,
+				'message'  => __( 'Failed to resolve output directory path.', 'compilekit' ),
+				'resolved' => array(),
+			);
+		}
+
+		$output_dir_real = trailingslashit( wp_normalize_path( $output_dir_real ) );
+		if ( strpos( $output_dir_real, $theme_root ) !== 0 ) {
+			return array(
+				'success'  => false,
+				'message'  => __( 'Output CSS path must be inside the active theme directory.', 'compilekit' ),
+				'resolved' => array(),
+			);
+		}
+
+		// Rebuild output path from the verified real directory.
+		$output_abs = $output_dir_real . basename( $output_abs );
+
 		return array(
 			'success'  => true,
 			'message'  => __( 'Successfully resolved system paths.', 'compilekit' ),
@@ -190,10 +221,15 @@ class CompileKit_Compiler {
 		
 		// 3) FUNCTIONAL PRE-FLIGHT CHECK [exec/ only since it returns exit code]
 		// We run the binary with --help. If it crashes, hangs, or errors, the environment is incompatible.
-		if ( is_callable( 'exec' ) ) {
+		// The successful result is cached per binary signature (mtime:size) so we don't spawn an extra
+		// process on every compile (e.g. Auto-Compilation on each page refresh). A re-download changes
+		// the signature and re-triggers the check; failures are never cached.
+		$preflight_sig = (int) $fs->mtime( $binary_path ) . ':' . (int) $fs->size( $binary_path );
+
+		if ( is_callable( 'exec' ) && get_transient( COMPILEKIT_TRANSIENT_PREFLIGHT ) !== $preflight_sig ) {
 			$dry_run_cmd = escapeshellarg( $binary_path ) . ' --help';
 			$dry_run     = CompileKit_Helpers::process_runner( $dry_run_cmd );
-			
+
 			if ( $dry_run['exit_code'] !== 0 ) {
 				// Capture the error output to give the user a clue (e.g., "kernel too old", "error while loading shared libraries")
 				$error_detail = is_array( $dry_run['output'] ) ? implode( ' | ', $dry_run['output'] ?? [] ) : (string) $dry_run['output'];
@@ -230,6 +266,9 @@ class CompileKit_Compiler {
 					'message'   => implode( '<br>', $lines ),
 				);
 			}
+
+			// Binary started cleanly — cache the signature to skip this check next time.
+			set_transient( COMPILEKIT_TRANSIENT_PREFLIGHT, $preflight_sig, DAY_IN_SECONDS );
 		}
 		
 		
@@ -459,26 +498,10 @@ class CompileKit_Compiler {
 			
 			putenv( 'NODE_PATH=' . $node_modules );
 			putenv( 'RAYON_NUM_THREADS=' . $worker_threads );
-			
-			// 5) Ensure Node.js is available to exectue.
-			$node_check = CompileKit_Helpers::process_runner( 'node --version' );
-			if ( empty( $node_check['output'] ) || ( isset( $node_check['success'] ) && $node_check['success'] === false ) ) {
-				$error_output = isset( $node_check['output'] ) ? trim( (string) $node_check['output'] ) : '';
-				$message      = __( 'Node.js is not installed or not available in PATH.', 'compilekit' );
-				
-				if ( $error_output !== '' ) {
-					$message .= '<br>' . esc_html( $error_output );
-				}
-				
-				return array(
-					'success' => false,
-					'message' => $message,
-					'method'  => $node_check['method'] ?? '',
-					'output'  => $node_check['output'] ?? '',
-				);
-			}
-			
-			// 6) Resolve paths.
+
+			// 5) Resolve paths.
+			// A missing Node.js runtime surfaces from the Tailwind binary run below
+			// (its shebang fails with a capturable error), so no separate node check is needed.
 			$resolved = self::resolve_compile_paths();
 			if ( empty( $resolved['success'] ) ) {
 				return array(
@@ -499,7 +522,7 @@ class CompileKit_Compiler {
 				);
 			}
 			
-			// 7) Build command.
+			// 6) Build command.
 			$cmd = escapeshellarg( $tailwind_bin )
 			       . ' --input ' . escapeshellarg( $input_css )
 			       . ' --output ' . escapeshellarg( $output_css )
@@ -522,7 +545,7 @@ class CompileKit_Compiler {
 			$run    = CompileKit_Helpers::process_runner( $cmd );
 			$after  = $fs->exists( $output_css ) ? (int) $fs->mtime( $output_css ) : 0;
 			
-			// 8) Validate output.
+			// 7) Validate output.
 			$output_ok = $fs->exists( $output_css )
 			             && $fs->is_file( $output_css )
 			             && (int) $fs->size( $output_css ) > 0
@@ -624,13 +647,15 @@ class CompileKit_Compiler {
 			return;
 		}
 		
-		// Throttle to avoid repeated compiles on asset requests / multiple hits
+		// Throttle to avoid repeated compiles on asset requests / multiple hits.
+		// The guard TTL must outlive a slow build so concurrent requests can't start
+		// an overlapping compile while this one is still running.
 		$lock_key = 'compilekit_compile_lock_' . $user_id;
 		if ( get_transient( $lock_key ) ) {
 			return;
 		}
-		set_transient( $lock_key, 1, 5 );
-		
+		set_transient( $lock_key, 1, MINUTE_IN_SECONDS );
+
 		$active_compiler = CompileKit_Environment::get_active_compiler();
 		
 		if ( $active_compiler === 'cli' ) {
@@ -644,6 +669,10 @@ class CompileKit_Compiler {
 			);
 		}
 		
+		// Compile finished: shorten the guard to a brief debounce so the next
+		// deliberate page refresh recompiles, while still absorbing asset-request bursts.
+		set_transient( $lock_key, 1, COMPILEKIT_COMPILE_DEBOUNCE );
+
 		// Set the status for Admin Bar
 		$success = array_key_exists( 'success', $result ) ? $result['success'] : false; // true|false|null
 		
@@ -655,7 +684,7 @@ class CompileKit_Compiler {
 			$status = 'unknown';
 		}
 		
-		set_transient( 'compilekit_compilation_status_' . $user_id, $status, 30 );
+		set_transient( COMPILEKIT_TRANSIENT_STATUS_PREFIX . $user_id, $status, COMPILEKIT_STATUS_TTL );
 	}
 	
 }

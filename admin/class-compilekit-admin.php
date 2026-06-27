@@ -136,8 +136,29 @@ class CompileKit_Admin {
 			return;
 		}
 		
-		wp_enqueue_style( 'compilekit-admin', COMPILEKIT_URL . 'assets/css/admin-styles.css', array(), filemtime( COMPILEKIT_PATH . 'assets/css/admin-styles.css' ) );
-		wp_enqueue_style( 'compilekit-output', COMPILEKIT_URL . 'assets/css/output.css', array('common', 'forms'), filemtime( COMPILEKIT_PATH . 'assets/css/output.css' ) );
+		wp_enqueue_style( 'compilekit-admin', COMPILEKIT_URL . 'assets/css/admin-styles.css', array(), self::asset_version( 'assets/css/admin-styles.css' ) );
+		wp_enqueue_style( 'compilekit-output', COMPILEKIT_URL . 'assets/css/output.css', array('common', 'forms'), self::asset_version( 'assets/css/output.css' ) );
+	}
+
+
+	/**
+	 * Cache-busting version for a plugin asset: file mtime when available,
+	 * falling back to the plugin version (e.g. when output.css is not yet compiled).
+	 *
+	 * @param string $relative_path Asset path relative to the plugin root.
+	 * @return string
+	 */
+	private static function asset_version( string $relative_path ) : string {
+		$abs = COMPILEKIT_PATH . $relative_path;
+
+		if ( is_readable( $abs ) ) {
+			$mtime = filemtime( $abs );
+			if ( $mtime !== false ) {
+				return (string) $mtime;
+			}
+		}
+
+		return COMPILEKIT_VERSION;
 	}
 	
 	
@@ -305,6 +326,10 @@ class CompileKit_Admin {
 		$iterator = new RecursiveIteratorIterator(
 			new RecursiveDirectoryIterator( $theme_dir, FilesystemIterator::SKIP_DOTS )
 		);
+
+		// Limit nesting depth: list entry files (e.g. assets/styles/src/input.css)
+		// while skipping deeply-nested partials (vendors/, components/, etc.).
+		$iterator->setMaxDepth( COMPILEKIT_CSS_SCAN_MAX_DEPTH );
 		
 		foreach ( $iterator as $file ) {
 			if ( ! $file->isFile() ) {
@@ -358,7 +383,7 @@ class CompileKit_Admin {
 			return;
 		}
 		
-		$notice_key = 'compilekit_compilation_status_' . $user_id;
+		$notice_key = COMPILEKIT_TRANSIENT_STATUS_PREFIX . $user_id;
 		$status     = (string) get_transient( $notice_key );
 		
 		// Determine Admin Bar Title based on the status
