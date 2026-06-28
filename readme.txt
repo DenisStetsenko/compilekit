@@ -4,7 +4,7 @@ Tags: theme, tailwind, css, cli, compiler
 Requires at least: 6.0
 Tested up to: 7.0
 Requires PHP: 7.4
-Stable tag: 3.0.2
+Stable tag: 3.0.3
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,6 +31,9 @@ An HTTPS request to GitHub is made only when an admin clicks “Download Tailwin
 
 
 == Changelog ==
+
+= 3.0.3 =
+* Added a loading overlay with a status message for long-running actions (CLI download, npm install/remove, manual compile) so the page no longer appears frozen.
 
 = 3.0.2 =
 * Hardened output CSS path validation against parent-directory (..) traversal.

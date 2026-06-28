@@ -17,7 +17,7 @@ $compilekit_cli_version          = CompileKit_Environment::get_standalone_execut
 
 settings_errors();
 ?>
-<div id="compilekit-admin-settings" class="p-6 pb-12 space-y-6" data-theme="emerald">
+<div id="compilekit-admin-settings" class="p-6 pb-12 space-y-6">
 	
 	<!-- HEADER -->
 	<header id="header">
@@ -37,7 +37,7 @@ settings_errors();
 	<!-- /HEADER -->
 	
 	<!-- LAYOUT -->
-	<div class="grid gap-6 xl:grid-cols-[1fr_1fr_minmax(430px,_1fr)]">
+	<div class="grid gap-6 xl:grid-cols-[1fr_1fr_minmax(430px,1fr)]">
 		
 		<main id="main" class="overflow-hidden shadow-md border rounded-box bg-white xl:col-span-2 xl:row-start-1">
 			<header class="pt-4.5 pb-4 px-6 border-b bg-primary flex items-center gap-1.5">

@@ -2,7 +2,7 @@
 /**
  * Plugin Name: CompileKit - Tailwind CSS Compiler
  * Description: Compile Tailwind CSS with a server-side compiler. Provides an admin UI, auto-compilation mode, and environment-aware output.
- * Version: 3.0.2
+ * Version: 3.0.3
  * Author: Denis Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
  * Plugin URI: https://github.com/DenisStetsenko/compilekit
@@ -17,7 +17,7 @@ if ( !defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'COMPILEKIT_VERSION', '3.0.2' );
+define( 'COMPILEKIT_VERSION', '3.0.3' );
 define( 'COMPILEKIT_PATH', plugin_dir_path( __FILE__ ) );
 define( 'COMPILEKIT_URL', plugin_dir_url( __FILE__ ) );
 define( 'COMPILEKIT_WORKER_THREADS_DEFAULT', 33 );

@@ -138,6 +138,20 @@ class CompileKit_Admin {
 		
 		wp_enqueue_style( 'compilekit-admin', COMPILEKIT_URL . 'assets/css/admin-styles.css', array(), self::asset_version( 'assets/css/admin-styles.css' ) );
 		wp_enqueue_style( 'compilekit-output', COMPILEKIT_URL . 'assets/css/output.css', array('common', 'forms'), self::asset_version( 'assets/css/output.css' ) );
+
+		wp_enqueue_script( 'compilekit-admin', COMPILEKIT_URL . 'assets/js/admin.js', array(), self::asset_version( 'assets/js/admin.js' ), true );
+		wp_localize_script( 'compilekit-admin', 'compilekitAdmin', array(
+			'working'  => __( 'Working…', 'compilekit' ),
+			'hint'     => __( 'This may take a while. Please keep this tab open.', 'compilekit' ),
+			'messages' => array(
+				'compilekit_download_cli'       => __( 'Downloading Tailwind Standalone CLI…', 'compilekit' ),
+				'compilekit_download_cli_force' => __( 'Reinstalling Tailwind Standalone CLI…', 'compilekit' ),
+				'compilekit_remove_cli'         => __( 'Removing Tailwind Standalone CLI…', 'compilekit' ),
+				'compilekit_download_modules'   => __( 'Installing Tailwind Node.js packages…', 'compilekit' ),
+				'compilekit_remove_modules'     => __( 'Removing Tailwind Node.js packages…', 'compilekit' ),
+				'compilekit_run_manually'       => __( 'Compiling CSS…', 'compilekit' ),
+			),
+		) );
 	}
 
 

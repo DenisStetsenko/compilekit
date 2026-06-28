@@ -176,3 +176,58 @@ body {
   outline: none;
 	box-shadow: none;
 }
+
+/* Loading overlay */
+#compilekit-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100000;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  background-color: oklch(0% 0 0 / 0.55);
+  backdrop-filter: blur(2px);
+}
+#compilekit-overlay.is-visible {
+  display: flex;
+}
+#compilekit-overlay .compilekit-overlay__box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.625rem;
+  max-width: min(90vw, 28rem);
+  padding: 2.5rem;
+  border-radius: var(--radius-box, 0.75rem);
+  background-color: #fff;
+  box-shadow: 0 10px 40px oklch(0% 0 0 / 0.25);
+  text-align: center;
+}
+#compilekit-overlay .compilekit-overlay__spinner {
+  width: 2.75rem;
+  height: 2.75rem;
+  border: 4px solid var(--color-base-300, #e5e7eb);
+  border-top-color: var(--color-primary, #2563eb);
+  border-radius: 50%;
+  animation: compilekit-spin 0.7s linear infinite;
+}
+#compilekit-overlay .compilekit-overlay__text {
+  margin: 0.625rem 0 0 0;
+  font-size: 1.375rem;
+  font-weight: 700;
+}
+#compilekit-overlay .compilekit-overlay__hint {
+  margin: 0;
+  font-size: 1rem;
+}
+#compilekit-overlay .compilekit-overlay__hint:empty {
+  display: none;
+}
+@keyframes compilekit-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  #compilekit-overlay .compilekit-overlay__spinner {
+    animation-duration: 1.8s;
+  }
+}

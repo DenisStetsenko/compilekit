@@ -30,7 +30,7 @@
 }
 
 @plugin "daisyui/theme" {
-  name: "emerald";
+  name: "compilekit";
   default: true;
   --btn-fg: var(--color-white);
   --btn-font-weight: var(--font-weight-medium);

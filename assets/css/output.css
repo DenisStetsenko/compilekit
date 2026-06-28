@@ -1,4 +1,4 @@
-/*! tailwindcss v4.1.18 | MIT License | https://tailwindcss.com */
+/*! tailwindcss v4.3.0 | MIT License | https://tailwindcss.com */
 @layer properties;
 @layer theme, base, components, utilities;
 @layer theme {
@@ -27,8 +27,6 @@
     --font-weight-normal: 400;
     --font-weight-medium: 500;
     --leading-snug: 1.375;
-    --default-transition-duration: 150ms;
-    --default-transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
     --font-inter: "Inter", ui-sans-serif, system-ui;
   }
 }
@@ -38,6 +36,9 @@
       @layer daisyui.l1.l2.l3 {
         width: unset;
       }
+    }
+    .prose :where(a&:not(.btn-link)):not(:where([class~="not-prose"], [class~="not-prose"] *)) {
+      text-decoration-line: none;
     }
     @layer daisyui.l1.l2.l3 {
       display: inline-flex;
@@ -306,6 +307,7 @@
         grid-row-start: 1;
         aspect-ratio: 1 / 1;
         height: 100%;
+        width: 100%;
         border-radius: var(--radius-selector);
         background-color: currentcolor;
         translate: 0;
@@ -960,15 +962,6 @@
   .m-0\! {
     margin: calc(var(--spacing) * 0) !important;
   }
-  .my-5 {
-    margin-block: calc(var(--spacing) * 5);
-  }
-  .my-5\! {
-    margin-block: calc(var(--spacing) * 5) !important;
-  }
-  .my-6 {
-    margin-block: calc(var(--spacing) * 6);
-  }
   .label {
     @layer daisyui.l1.l2.l3 {
       display: inline-flex;
@@ -1013,9 +1006,6 @@
   }
   .mt-0\.5 {
     margin-top: calc(var(--spacing) * 0.5);
-  }
-  .mt-4\.5 {
-    margin-top: calc(var(--spacing) * 4.5);
   }
   .mt-5\! {
     margin-top: calc(var(--spacing) * 5) !important;
@@ -1337,9 +1327,6 @@
   .py-4 {
     padding-block: calc(var(--spacing) * 4);
   }
-  .py-5 {
-    padding-block: calc(var(--spacing) * 5);
-  }
   .pt-4\.5 {
     padding-top: calc(var(--spacing) * 4.5);
   }
@@ -1637,9 +1624,9 @@
       grid-row-start: 2;
     }
   }
-  .xl\:grid-cols-\[1fr_1fr_minmax\(430px\,_1fr\)\] {
+  .xl\:grid-cols-\[1fr_1fr_minmax\(430px\,1fr\)\] {
     @media (width >= 80rem) {
-      grid-template-columns: 1fr 1fr minmax(430px, 1fr);
+      grid-template-columns: 1fr 1fr minmax(430px,1fr);
     }
   }
   .xl\:gap-x-8 {
@@ -1821,13 +1808,16 @@
   }
 }
 @layer base {
-  :where(:root),:root:has(input.theme-controller[value=emerald]:checked),[data-theme="emerald"] {
+  :where(:root),:root:has(input.theme-controller[value=compilekit]:checked),[data-theme="compilekit"] {
     color-scheme: normal;
+    --btn-fg: var(--color-white);
+    --btn-font-weight: var(--font-weight-medium);
     --color-base-100: oklch(100% 0 0);
     --color-base-200: oklch(93% 0 0);
     --color-base-300: oklch(86% 0 0);
     --color-base-content: oklch(21% .006 285.885);
     --color-primary: oklch(68.5% 0.169 237.323);
+    --color-primary-darken: oklch(58.8% 0.158 241.966);
     --color-primary-content: oklch(100% 0 0);
     --color-secondary: oklch(49.1% 0.27 292.581);
     --color-secondary-content: oklch(100% 0 0);
@@ -1843,6 +1833,11 @@
     --color-warning-content: oklch(0% 0 0);
     --color-error: oklch(0.6 0.26 27.01);
     --color-error-content: oklch(100% 0 0);
+    --color-border: var(--color-base-content);
+    @supports (color: color-mix(in lab, red, red)) {
+      --color-border: color-mix(in oklab, var(--color-base-content) 10%, transparent);
+    }
+    --root-bg: var(--color-neutral-50);
     --radius-selector: 1rem;
     --radius-field: 0.5rem;
     --radius-box: 1rem;
@@ -1851,14 +1846,6 @@
     --border: 1px;
     --depth: 0;
     --noise: 0;
-    --btn-fg: var(--color-white);
-    --btn-font-weight: var(--font-weight-medium);
-    --color-primary-darken: oklch(58.8% 0.158 241.966);
-    --color-border: var(--color-base-content);
-    @supports (color: color-mix(in lab, red, red)) {
-      --color-border: color-mix(in oklab, var(--color-base-content) 10%, transparent);
-    }
-    --root-bg: var(--color-neutral-50);
   }
 }
 @property --tw-space-y-reverse {
