@@ -2,9 +2,9 @@
 Contributors: mstrdh
 Tags: theme, tailwind, css, cli, compiler
 Requires at least: 6.0
-Tested up to: 7.0
+Tested up to: 7.0.3
 Requires PHP: 7.4
-Stable tag: 3.0.4
+Stable tag: 3.0.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -32,9 +32,12 @@ An HTTPS request to GitHub is made only when an admin clicks “Download Tailwin
 
 == Changelog ==
 
+= 3.0.5 =
+* Tested up to WordPress 7.0.3.
+
 = 3.0.4 =
 * Fixed compilation being reported as failed on hosts that cap the number of processes/threads (ulimit -u), where the compiler finishes the build but never exits. The build is now completed as soon as the compiler reports it is done.
-* Added a 30-second guard for compiler processes so a stuck build can no longer freeze the admin request until a gateway timeout.
+* Added a 20-second guard for compiler processes so a stuck build can no longer freeze the admin request until a gateway timeout.
 * Removed the "Auto" compiler mode. Node.js (npm) is now the default; the other compiler is used automatically as a fallback when the selected one is missing or fails.
 * Unminified builds (Local/Staging) now run the optimizer for a smaller stylesheet.
 * Hardened the Node.js package installation: package lifecycle scripts are no longer executed, so a compromised dependency cannot run code on the server.
