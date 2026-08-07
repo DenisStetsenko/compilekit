@@ -168,6 +168,62 @@ class CompileKit_Compiler {
 	
 	
 	/**
+	 * Builds the result for a compile whose process had to be terminated.
+	 *
+	 * Tailwind can write the stylesheet and then hang on exit when the host caps the
+	 * process/thread limit (ulimit -u), so a fresh output file still counts as success.
+	 *
+	 * @param string $output_css Absolute path to the compiled stylesheet.
+	 * @param int    $before     Output mtime captured before the run.
+	 * @param array  $run        Raw process runner result.
+	 * @return array
+	 */
+	private static function stopped_process_result( string $output_css, int $before, array $run ) : array {
+		$fs = CompileKit_Helpers::fs();
+
+		$output_ok = $fs
+		             && $fs->exists( $output_css )
+		             && $fs->is_file( $output_css )
+		             && (int) $fs->size( $output_css ) > 0
+		             && (int) $fs->mtime( $output_css ) >= $before;
+
+		if ( $output_ok ) {
+			// Surface the compiler's own timing (e.g. "Done in 185ms") when it reported one.
+			$timing = '';
+			if ( preg_match( '/' . preg_quote( COMPILEKIT_TAILWIND_DONE_MARKER, '/' ) . '[^\r\n]*/', (string) ( $run['output'] ?? '' ), $m ) ) {
+				$timing = trim( $m[0] ) . '.';
+			}
+
+			// Completion reported while the process was still hanging: the wait was short.
+			// Hitting the timeout instead means the full guard window was spent.
+			$message = ! empty( $run['work_done'] )
+				/* translators: %s: compiler timing, e.g. "Done in 185ms." */
+				? trim( sprintf( __( 'Successfully compiled Tailwind CSS styles. %s', 'compilekit' ), $timing ) )
+				: __( 'Tailwind CSS was compiled. Your CSS is up to date.', 'compilekit' );
+
+			return array(
+				'success' => true,
+				'message' => $message,
+				'method'  => $run['method'] ?? '',
+				'output'  => $run['output'] ?? '',
+				'path'    => $output_css,
+			);
+		}
+
+		return array(
+			'success' => false,
+			'message' => sprintf(
+			/* translators: %d: timeout in seconds */
+				__( 'Tailwind CSS compilation was stopped after %d seconds without producing any output. The host may limit the number of processes/threads (ulimit -u) — ask your hosting provider to raise it.', 'compilekit' ),
+				COMPILEKIT_COMPILE_TIMEOUT
+			),
+			'method'  => $run['method'] ?? '',
+			'output'  => $run['output'] ?? '',
+		);
+	}
+
+
+	/**
 	 * Compiles Tailwind CSS using the Standalone CLI binary
 	 *
 	 * @return array
@@ -190,7 +246,7 @@ class CompileKit_Compiler {
 		}
 		
 		$compilekit_dir = CompileKit_Helpers::compilekit_modules_dir();
-		$os             = CompileKit_Helpers::detect_os_family();
+		$os             = PHP_OS_FAMILY;
 		$binary_name    = ( $os === 'Windows' ) ? 'tailwindcli.exe' : 'tailwindcli';
 		$binary_path    = $compilekit_dir . $binary_name;
 		
@@ -228,7 +284,7 @@ class CompileKit_Compiler {
 
 		if ( is_callable( 'exec' ) && get_transient( COMPILEKIT_TRANSIENT_PREFLIGHT ) !== $preflight_sig ) {
 			$dry_run_cmd = escapeshellarg( $binary_path ) . ' --help';
-			$dry_run     = CompileKit_Helpers::process_runner( $dry_run_cmd );
+			$dry_run     = CompileKit_Helpers::process_runner( $dry_run_cmd, COMPILEKIT_COMPILE_TIMEOUT );
 
 			if ( $dry_run['exit_code'] !== 0 ) {
 				// Capture the error output to give the user a clue (e.g., "kernel too old", "error while loading shared libraries")
@@ -302,26 +358,35 @@ class CompileKit_Compiler {
 			}
 			
 			// 6) Build/Run command
-			$cmd = escapeshellarg( $binary_path )
-			       . ' --input ' . escapeshellarg( $input_css )
-			       . ' --output ' . escapeshellarg( $output_css )
-			       . ' --cwd ' . escapeshellarg( $cwd );
-			
+			$cmd = array(
+				$binary_path,
+				'--input', $input_css,
+				'--output', $output_css,
+				'--cwd', $cwd,
+			);
+
 			// Should minify?
 			$minify = CompileKit_Environment::should_minify();
 			if ( $minify ) {
-				$cmd .= ' --minify';
+				$cmd[] = '--minify';
+			} else {
+				$cmd[] = '--optimize';
 			}
-			
+
 			// Should generate source map?
 			$sourcemap = CompileKit_Environment::should_generate_sourcemap();
 			if ( $sourcemap ) {
-				$cmd .= ' --map';
+				$cmd[] = '--map';
 			}
 			
 			$before = $fs->exists( $output_css ) ? (int) $fs->mtime( $output_css ) : 0;
-			$run = CompileKit_Helpers::process_runner( $cmd );
-			
+			$run = CompileKit_Helpers::process_runner_watch( $cmd, COMPILEKIT_TAILWIND_DONE_MARKER, COMPILEKIT_COMPILE_TIMEOUT );
+
+			// Process never exited: judge by the stylesheet instead of the exit code.
+			if ( ! empty( $run['work_done'] ) || ! empty( $run['timed_out'] ) ) {
+				return self::stopped_process_result( $output_css, $before, $run );
+			}
+
 			// exit code is only reliable when returned as a real value (exec path)
 			$has_exit_code = array_key_exists( 'exit_code', $run ) && $run['exit_code'] !== null;
 			$exit_code     = $has_exit_code ? (int) $run['exit_code'] : 0;
@@ -347,7 +412,7 @@ class CompileKit_Compiler {
 						/* translators: %1$d: exit code, %2$s: output lines */
 						__( 'Compilation via Standalone CLI has failed. Last exit code %1$d: %2$s', 'compilekit' ),
 						(int) ( $run['exit_code'] ?? 0 ),
-						$output_text
+						esc_html( $output_text )
 					);
 				}
 				
@@ -440,7 +505,7 @@ class CompileKit_Compiler {
 		}
 		
 		// 3) Prepare paths (local .bin is the most reliable).
-		$os               = CompileKit_Helpers::detect_os_family();
+		$os               = PHP_OS_FAMILY;
 		$compilekit_dir   = CompileKit_Helpers::compilekit_modules_dir();
 		$node_modules     = trailingslashit( wp_normalize_path( $compilekit_dir ) ) . 'node_modules';
 		$node_modules_bin = trailingslashit( wp_normalize_path( $node_modules ) ) . '.bin';
@@ -523,26 +588,36 @@ class CompileKit_Compiler {
 			}
 			
 			// 6) Build command.
-			$cmd = escapeshellarg( $tailwind_bin )
-			       . ' --input ' . escapeshellarg( $input_css )
-			       . ' --output ' . escapeshellarg( $output_css )
-			       . ' --cwd ' . escapeshellarg( $cwd );
-			
+			$cmd = array(
+				$tailwind_bin,
+				'--input', $input_css,
+				'--output', $output_css,
+				'--cwd', $cwd,
+			);
+
 			if ( CompileKit_Environment::should_minify() ) {
-				$cmd .= ' --minify';
+				$cmd[] = '--minify';
+			} else {
+				$cmd[] = '--optimize';
 			}
-			
+
 			if ( CompileKit_Environment::should_generate_sourcemap() ) {
-				$cmd .= ' --map';
+				$cmd[] = '--map';
 			}
-			
+
 			// Windows: ensure the .cmd/.ps1 runs consistently.
 			if ( $os === 'Windows' ) {
-				$cmd = 'cmd /c ' . $cmd;
+				array_unshift( $cmd, 'cmd', '/c' );
 			}
 			
 			$before = $fs->exists( $output_css ) ? (int) $fs->mtime( $output_css ) : 0;
-			$run    = CompileKit_Helpers::process_runner( $cmd );
+			$run    = CompileKit_Helpers::process_runner_watch( $cmd, COMPILEKIT_TAILWIND_DONE_MARKER, COMPILEKIT_COMPILE_TIMEOUT );
+
+			// Process never exited: judge by the stylesheet instead of the exit code.
+			if ( ! empty( $run['work_done'] ) || ! empty( $run['timed_out'] ) ) {
+				return self::stopped_process_result( $output_css, $before, $run );
+			}
+
 			$after  = $fs->exists( $output_css ) ? (int) $fs->mtime( $output_css ) : 0;
 			
 			// 7) Validate output.
@@ -563,7 +638,7 @@ class CompileKit_Compiler {
 				
 				return array(
 					'success' => $success, // true|null
-					'message' => __( 'Successfully compiled Tailwind CSS styles using Node.js.', 'compilekit' ),
+					'message' => __( 'Successfully compiled Tailwind CSS styles.', 'compilekit' ),
 					'method'  => $run['method'] ?? '',
 					'output'  => $run['output'] ?? '',
 					'path'    => $output_css,

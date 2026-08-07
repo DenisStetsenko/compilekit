@@ -6,7 +6,7 @@ if ( !defined( 'ABSPATH' ) ) {
 $compilekit_css_files            = CompileKit_Admin::scan_theme_css_files();
 $compilekit_current_input        = get_option( 'compilekit_input_css', '' );
 $compilekit_current_output       = get_option( 'compilekit_output_css', '' );
-$compilekit_compiler_mode        = get_option( 'compilekit_compiler_mode', 'auto' );
+$compilekit_compiler_mode        = get_option( 'compilekit_compiler_mode', 'node' );
 $compilekit_run_on_refresh       = get_option( 'compilekit_run_on_refresh', 0 );
 $compilekit_worker_threads       = get_option( 'compilekit_worker_threads', COMPILEKIT_WORKER_THREADS_DEFAULT );
 $compilekit_current_environment  = CompileKit_Environment::get_environment();
@@ -236,10 +236,7 @@ settings_errors();
 				</h2>
 			</header>
 			<div class="body text-sm p-6">
-				<?php if (
-					( ( $compilekit_compiler_mode === 'auto' || $compilekit_compiler_mode === 'cli' ) && !$compilekit_cli_exists )
-					|| ( $compilekit_compiler_mode === 'node' && !$compilekit_node_modules_exists )
-				) : ?>
+				<?php if ( ( $compilekit_compiler_mode === 'cli' && !$compilekit_cli_exists ) || ( $compilekit_compiler_mode === 'node' && !$compilekit_node_modules_exists ) ) : ?>
 					<div class="alert alert-soft alert-error flex gap-x-2 mb-5" role="alert">
 						<svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6 shrink-0 stroke-current" fill="none" viewBox="0 0 24 24"
 						     aria-label="<?php echo esc_attr__( 'Warning:', 'compilekit' ); ?>">
@@ -247,8 +244,8 @@ settings_errors();
 						</svg>
 						<div>
 							<strong><?php esc_html_e( 'Note:', 'compilekit' ); ?></strong>
-							<?php if ( ( $compilekit_compiler_mode === 'auto' || $compilekit_compiler_mode === 'cli' ) && !$compilekit_cli_exists ) : ?>
-								<span><?php esc_html_e( 'Tailwind Standalone Executable binary is not downloaded. Click the button below to download it.', 'compilekit' ); ?></span>
+							<?php if ( $compilekit_compiler_mode === 'cli' && !$compilekit_cli_exists ) : ?>
+								<span><?php esc_html_e( 'Tailwind Standalone Executable binary is missing. Download it, by clicking the button below.', 'compilekit' ); ?></span>
 							<?php endif; ?>
 							<?php if ( $compilekit_compiler_mode === 'node' && !$compilekit_node_modules_exists ) : ?>
 								<span><?php esc_html_e( 'Tailwind Node.js packages are not installed. Install Node.js and npm first.', 'compilekit' ); ?></span>
@@ -257,15 +254,10 @@ settings_errors();
 					</div>
 				<?php endif; ?>
 				
-				<form method="post" action="#environment"
-				      class="flex flex-wrap items-center justify-between gap-5 border bg-violet-50 rounded-box px-5 py-4">
+				<form method="post" class="flex flex-wrap items-center justify-between gap-5 border bg-violet-50 rounded-box px-5 py-4"
+				      action="#environment">
 					<?php wp_nonce_field( 'compilekit_compiler_mode' ); ?>
 					<fieldset class="text-base flex flex-wrap gap-x-6 gap-y-4 items-center xl:gap-x-8">
-						<label class="label">
-							<input type="radio" name="compilekit_compiler_mode" class="radio radio-secondary" value="auto" <?php checked( $compilekit_compiler_mode, 'auto' ); ?>/>
-							Auto (recommended)
-						</label>
-						
 						<label class="label">
 							<input type="radio" name="compilekit_compiler_mode" class="radio radio-secondary" value="node" <?php checked( $compilekit_compiler_mode, 'node' ); ?>/>
 							Node.js (npm)
@@ -284,9 +276,6 @@ settings_errors();
 				
 				<ul role="list" class="text-[0.9375rem] mt-5! list-disc! ml-9 marker:text-secondary">
 					<?php
-					if ( $compilekit_compiler_mode === 'auto' ) {
-						echo '<li>' . esc_html__( 'Prefer Tailwind CLI as a Standalone Executable binary without installing Node.js.', 'compilekit' ) . '</li>';
-					}
 					if ( $compilekit_current_environment === 'live' ) {
 						echo '<li>' . sprintf(
 									/* translators: %s: the word "enabled" in bold */
@@ -311,7 +300,7 @@ settings_errors();
 				
 				<div class="divider "></div>
 				
-				<?php if ( $compilekit_compiler_mode === 'auto' || $compilekit_compiler_mode === 'cli' ) : ?>
+				<?php if ( $compilekit_compiler_mode === 'cli' ) : ?>
 				
 					<div class="flex flex-wrap gap-x-5 gap-y-4">
 						<form method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=compilekit' ) ); ?>">
@@ -353,7 +342,7 @@ settings_errors();
 						<?php endif; ?>
 					</div>
 				
-				<?php elseif ( $compilekit_compiler_mode === 'node' ) : ?>
+				<?php else : ?>
 				
 					<div class="flex flex-wrap gap-x-5 gap-y-4">
 						<form method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=compilekit' ) ); ?>">

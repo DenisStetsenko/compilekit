@@ -106,7 +106,7 @@ class CompileKit_Environment {
 		
 		try {
 			// Detect OS/arch (so we can set PATH correctly)
-			$os = CompileKit_Helpers::detect_os_family();
+			$os = PHP_OS_FAMILY;
 			
 			if ( $os === 'Darwin' ) {
 				// Apple Silicon + Intel Homebrew common locations
@@ -135,7 +135,7 @@ class CompileKit_Environment {
 					'success' => false,
 					'message' => sprintf( "%s\n%s",
 						__( 'Node.js or npm is not installed, or is not available in PATH.', 'compilekit' ),
-						$npm_output
+						esc_html( $npm_output )
 					));
 			}
 			
@@ -158,7 +158,9 @@ class CompileKit_Environment {
 					'message' => __( 'Failed to create CompileKit directory.', 'compilekit' ),
 				);
 			}
-			
+
+			CompileKit_Helpers::protect_modules_dir( $compilekit_dir );
+
 			// Check directory permissions
 			if ( ! $fs->is_writable( $compilekit_dir ) ) {
 				return array(
@@ -197,7 +199,7 @@ class CompileKit_Environment {
 			}
 			
 			// run NPM install
-			$command = 'npm install -D tailwindcss @tailwindcss/cli @tailwindcss/forms @tailwindcss/typography --no-audit --no-fund';
+			$command = 'npm install -D tailwindcss @tailwindcss/cli @tailwindcss/forms @tailwindcss/typography --no-audit --no-fund --ignore-scripts';
 			$result  = CompileKit_Helpers::process_runner( $command );
 			
 			// Restore original directory
@@ -224,7 +226,7 @@ class CompileKit_Environment {
 			return array(
 				'success' => false,
 				// translators: %s: List of package names that failed to install.
-				'message' => sprintf( __( "Failed to install packages:\n%s", 'compilekit' ), (string) $result['output'] ),
+				'message' => sprintf( __( "Failed to install packages:\n%s", 'compilekit' ), esc_html( (string) $result['output'] ) ),
 			);
 			
 			
@@ -341,7 +343,7 @@ class CompileKit_Environment {
 		
 		$cmd = escapeshellarg( $binary_path ) . ' --version';
 		
-		$os = CompileKit_Helpers::detect_os_family();
+		$os = PHP_OS_FAMILY;
 		if ( $os === 'Windows' ) {
 			$cmd = 'cmd /c ' . $cmd;
 		}
@@ -384,7 +386,9 @@ class CompileKit_Environment {
 				'message' => __( 'Failed to create CompileKit directory.', 'compilekit' ),
 			);
 		}
-		
+
+		CompileKit_Helpers::protect_modules_dir( $compilekit_dir );
+
 		if ( ! $fs->is_writable( $compilekit_dir ) ) {
 			return array(
 				'success' => false,
@@ -392,7 +396,7 @@ class CompileKit_Environment {
 			);
 		}
 		
-		$os = CompileKit_Helpers::detect_os_family();
+		$os = PHP_OS_FAMILY;
 		
 		// Stable renamed executable name
 		$final_name = ( $os === 'Windows' ) ? 'tailwindcli.exe' : 'tailwindcli';
@@ -512,6 +516,27 @@ class CompileKit_Environment {
 			);
 		}
 		
+		// Verify integrity before the binary lands on the executable path.
+		$expected_sha256 = CompileKit_Helpers::tailwind_expected_sha256_from_sums( $upstream_filename );
+
+		if ( $expected_sha256 === '' ) {
+			$cleanup_temp();
+
+			return array(
+				'success' => false,
+				'message' => __( 'Failed to verify Tailwind CLI integrity (missing sha256 for asset).', 'compilekit' ),
+			);
+		}
+
+		if ( ! CompileKit_Helpers::verify_file_sha256( $temp_file, $expected_sha256 ) ) {
+			$cleanup_temp();
+
+			return array(
+				'success' => false,
+				'message' => __( 'Downloaded Tailwind CLI failed integrity check (sha256 mismatch).', 'compilekit' ),
+			);
+		}
+
 		// Move to final stable name
 		if ( ! $fs->move( $temp_file, $final_path, true ) ) {
 			$cleanup_temp();
@@ -520,27 +545,7 @@ class CompileKit_Environment {
 				'message' => __( 'Failed to move Tailwind CLI into place.', 'compilekit' ),
 			);
 		}
-		
-		$expected_sha256 = CompileKit_Helpers::tailwind_expected_sha256_from_sums( $upstream_filename );
-		
-		if ( $expected_sha256 === '' ) {
-			$fs->delete( $final_path );
-			
-			return array(
-				'success' => false,
-				'message' => __( 'Failed to verify Tailwind CLI integrity (missing sha256 for asset).', 'compilekit' ),
-			);
-		}
-		
-		if ( ! CompileKit_Helpers::verify_file_sha256( $final_path, $expected_sha256 ) ) {
-			$fs->delete( $final_path );
-			
-			return array(
-				'success' => false,
-				'message' => __( 'Downloaded Tailwind CLI failed integrity check (sha256 mismatch).', 'compilekit' ),
-			);
-		}
-		
+
 		// Make executable on Unix
 		if ( $os !== 'Windows' ) {
 			$fs->chmod( $final_path, 0755 );
@@ -644,37 +649,21 @@ class CompileKit_Environment {
 	/**
 	 * Get the active compiler backend.
 	 *
-	 * Returns: 'cli', 'node', or 'auto'
-	 * - local -> prefer Node/npm (for IDE support + predictable dev workflow)
-	 * - staging / live -> prefer Standalone Tailwind CLI binary (less dependencies, more reliable)
-	 * - Default: 'auto'
+	 * Returns: 'cli', 'node' or 'none'
 	 *
-	 * MANUAL mode respects user choice but returns 'none' if the chosen backend is unavailable.
-	 * AUTO prefers cli over node, and returns 'none' if nothing exists.
+	 * The chosen backend wins when it is installed; otherwise the other one is used
+	 * as a fallback, so a missing dependency does not block compilation.
+	 * Default: 'node' (for IDE support + predictable dev workflow).
 	 */
 	public static function get_active_compiler() : string {
 		$cli  = self::standalone_executable_cli_exists();
 		$node = self::node_modules_exists();
-		$mode = get_option( 'compilekit_compiler_mode', 'auto' );
-		
-		if ( $mode === 'cli' ) {
-			return $cli ? 'cli' : '';
+
+		if ( get_option( 'compilekit_compiler_mode', 'node' ) === 'cli' ) {
+			return $cli ? 'cli' : ( $node ? 'node' : 'none' );
 		}
-		
-		if ( $mode === 'node' ) {
-			return $node ? 'node' : '';
-		}
-		
-		// auto:
-		if ( $cli ) {
-			return 'cli';
-		}
-		
-		if ( $node ) {
-			return 'node';
-		}
-		
-		return 'none';
+
+		return $node ? 'node' : ( $cli ? 'cli' : 'none' );
 	}
 	
 	

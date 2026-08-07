@@ -16,9 +16,10 @@ class CompileKit_Helpers {
 	 * • success === null  = unknown (shell_exec), not a failure signal
 	 *
 	 * @param string $command Command to execute
+	 * @param int    $timeout Kill the command after N seconds (0 = no limit). Unix only.
 	 * @return array
 	 */
-	public static function process_runner( string $command ) : array {
+	public static function process_runner( string $command, int $timeout = 0 ) : array {
 		$command = trim( $command );
 		if ( $command === '' ) {
 			return array(
@@ -28,18 +29,25 @@ class CompileKit_Helpers {
 				'output'    => 'Empty command.',
 			);
 		}
-		
+
+		$timeout_prefix = self::timeout_prefix( $timeout );
+		$command        = $timeout_prefix . $command;
+
 		// 1) exec() - good enough, has exit code
 		// ======================================
 		if ( is_callable( 'exec' ) ) {
 			$lines = array();
 			$code  = 0;
 			exec( $command . ' 2>&1', $lines, $code );
-			
+
+			// GNU timeout reports 124 on expiry, 137 when the follow-up KILL was needed.
+			$timed_out = ( $timeout_prefix !== '' && ( $code === 124 || $code === 137 ) );
+
 			return array(
 				'success'   => ( $code === 0 ),
 				'method'    => 'exec',
 				'exit_code' => $code,
+				'timed_out' => $timed_out,
 				'output'    => trim( implode( "\n", $lines ) ),
 			);
 		}
@@ -87,8 +95,133 @@ class CompileKit_Helpers {
 			'output'    => 'No process runner functions available.',
 		);
 	}
-	
-	
+
+
+	/**
+	 * Runs a command and stops waiting as soon as it reports its work is done.
+	 *
+	 * Hosts that cap the process/thread limit (ulimit -u) make native multithreaded binaries complete their work and hang instead of exiting.
+	 * Watching the output file instead would not work — Tailwind skips writing when the
+	 * compiled CSS is unchanged, leaving mtime untouched on a perfectly successful run.
+	 *
+	 * Falls back to process_runner() when proc_open() is unavailable.
+	 *
+	 * @param string[] $command     Command as an argument list. No shell is involved, so the arguments need no escaping
+	 *                              and proc_terminate() always reaches the compiler itself.
+	 * @param string   $done_marker Output substring printed once the work is complete.
+	 * @param int      $timeout     Hard limit in seconds.
+	 * @return array
+	 */
+	public static function process_runner_watch( array $command, string $done_marker, int $timeout ) : array {
+		if ( empty( $command ) || $done_marker === '' || ! is_callable( 'proc_open' ) ) {
+			// process_runner() runs through a shell, so the argument list has to be escaped back into a string.
+			return self::process_runner( implode( ' ', array_map( 'escapeshellarg', $command ) ), $timeout );
+		}
+
+		$pipes = array();
+		// phpcs:ignore Generic.PHP.ForbiddenFunctions.Found -- proc_open is required for real-time process monitoring and early termination.
+		$proc  = proc_open( $command, array(
+				1 => array( 'pipe', 'w' ),
+				2 => array( 'pipe', 'w' ),
+			),
+			$pipes
+		);
+
+		if ( ! is_resource( $proc ) ) {
+			return self::process_runner( implode( ' ', array_map( 'escapeshellarg', $command ) ), $timeout );
+		}
+		
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_stream_set_blocking -- proc_open streams require native functions.
+		stream_set_blocking( $pipes[1], false );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_stream_set_blocking -- proc_open streams require native functions.
+		stream_set_blocking( $pipes[2], false );
+		
+		$output     = '';
+		$deadline   = microtime( true ) + $timeout;
+		$exit_code  = null;
+		$ready      = false;
+		$is_windows = ( PHP_OS_FAMILY === 'Windows' );
+
+		while ( microtime( true ) < $deadline ) {
+			if ( $is_windows ) {
+				usleep( 100000 );
+			} else {
+				$read   = array( $pipes[1], $pipes[2] );
+				$write  = null;
+				$except = null;
+				stream_select( $read, $write, $except, 0, 100000 );
+			}
+			
+			// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_stream_get_contents -- proc_open streams require native functions.
+			$output .= stream_get_contents( $pipes[1] ) . stream_get_contents( $pipes[2] );
+
+			$status = proc_get_status( $proc );
+
+			// Healthy Hosting: the process exits on its own.
+			if ( ! $status['running'] ) {
+				$exit_code = (int) $status['exitcode'];
+				break;
+			}
+			
+			// Capped Hosting: the process hangs after finishing, so trust what it printed
+			if ( ! $ready && str_contains( $output, $done_marker ) ) {
+				$ready    = true;
+				$deadline = min( $deadline, microtime( true ) + 1 );
+			}
+			
+		}
+		
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_stream_get_contents -- proc_open streams require native functions.
+		$output .= stream_get_contents( $pipes[1] ) . stream_get_contents( $pipes[2] );
+		
+		if ( $exit_code === null ) {
+			proc_terminate( $proc, defined( 'SIGKILL' ) ? SIGKILL : 9 );
+		}
+		
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- proc_open streams require native functions.
+		fclose( $pipes[1] );
+		// phpcs:ignore WordPress.WP.AlternativeFunctions.file_system_operations_fclose -- proc_open streams require native functions.
+		fclose( $pipes[2] );
+		
+		proc_close( $proc );
+
+		return array(
+			'success'   => ( $exit_code === 0 ),
+			'method'    => 'proc_open',
+			'exit_code' => $exit_code,
+			'timed_out' => ( $exit_code === null && ! $ready ),
+			// Only meaningful when the process never exited: it reported success, so trust that over the missing exit code.
+			'work_done' => ( $exit_code === null && $ready ),
+			'output'    => trim( $output ),
+		);
+	}
+
+
+	/**
+	 * Builds a `timeout` command prefix so a stuck process cannot hang the request.
+	 *
+	 * Tailwind can finish its work and then fail to exit if the host caps the process/thread limit (ulimit -u),
+	 * which otherwise blocks PHP until the web server returns a gateway timeout.
+	 */
+	private static function timeout_prefix( int $seconds ) : string {
+		$os = PHP_OS_FAMILY;
+		
+		if ( $seconds <= 0 || $os === 'Windows' ) {
+			return '';
+		}
+
+		foreach ( array( '/usr/bin/timeout', '/bin/timeout', '/usr/local/bin/timeout' ) as $binary ) {
+			if ( is_executable( $binary ) ) {
+				// -k 5: follow up with SIGKILL if the process ignores the initial TERM.
+				return escapeshellarg( $binary ) . ' -k 5 ' . $seconds . ' ';
+			}
+		}
+
+		// Utility unavailable (Windows, or a host without coreutils): leave the command unchanged.
+		return '';
+	}
+
+
 	/**
 	 * Checks if the system has the ability to execute external processes via `exec` or `shell_exec`.
 	 */
@@ -104,14 +237,20 @@ class CompileKit_Helpers {
 		$upload_dir = wp_upload_dir();
 		return trailingslashit( $upload_dir['basedir'] ) . 'compilekit/';
 	}
-	
-	
+
+
 	/**
-	 * Detects the operating system family of the server running the PHP script.
+	 * Drops a placeholder index.php into the CompileKit directory.
+	 *
+	 * Hides the directory listing on servers with autoindex enabled; direct file requests are unaffected.
 	 */
-	public static function detect_os_family() : string {
-		// PHP_OS_FAMILY returns: 'Windows', 'BSD', 'Darwin', 'Solaris', 'Linux', 'Unknown'
-		return PHP_OS_FAMILY;
+	public static function protect_modules_dir( string $dir ) : void {
+		$index = trailingslashit( $dir ) . 'index.php';
+		$fs    = self::fs();
+
+		if ( $fs && ! $fs->exists( $index ) ) {
+			$fs->put_contents( $index, '<?php // Nothing to show here' . PHP_EOL, FS_CHMOD_FILE );
+		}
 	}
 	
 	
@@ -128,7 +267,9 @@ class CompileKit_Helpers {
 	 * Detect Linux libc: 'musl' (Alpine) or 'glibc' (default).
 	 */
 	public static function detect_linux_libc() : string {
-		if ( self::detect_os_family() !== 'Linux' ) {
+		$os = PHP_OS_FAMILY;
+		
+		if ( $os !== 'Linux' ) {
 			return '';
 		}
 		
@@ -153,9 +294,8 @@ class CompileKit_Helpers {
 	 * Example: tailwindcss-macos-arm64, tailwindcss-linux-x64, tailwindcss-windows-x64.exe
 	 */
 	public static function tailwind_standalone_filename() : string {
-		$os   = self::detect_os_family();
-		$arch = self::detect_arch();
-		
+		$os     = PHP_OS_FAMILY;
+		$arch   = self::detect_arch();
 		$is_arm = in_array( $arch, array( 'arm64', 'aarch64' ), true );
 		
 		if ( $os === 'Darwin' ) {
@@ -173,8 +313,7 @@ class CompileKit_Helpers {
 		}
 		
 		if ( $os === 'Windows' ) {
-			// Tailwind standalone uses .exe on Windows
-			return 'tailwindcss-windows-x64.exe';
+			return $is_arm ? 'tailwindcss-windows-arm64.exe' : 'tailwindcss-windows-x64.exe';
 		}
 		
 		return '';
@@ -212,7 +351,7 @@ class CompileKit_Helpers {
 		
 		$url = 'https://github.com/tailwindlabs/tailwindcss/releases/latest/download/sha256sums.txt';
 		$response = wp_remote_get( $url, array(
-				'timeout'    => 30,
+				'timeout'    => 15,
 				'user-agent' => 'WordPress/compilekit',
 			)
 		);

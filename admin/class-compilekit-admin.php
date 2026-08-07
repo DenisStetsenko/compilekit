@@ -50,19 +50,14 @@ class CompileKit_Admin {
 		$success = array_key_exists( 'success', $result ) ? $result['success'] : false; // true|false|null
 		
 		if ( $type === '' ) {
-			if ( $success === true ) {
-				$type = 'success';
-			} elseif ( $success === null ) {
-				$type = 'success';
-			} else {
-				$type = 'error';
-			}
+			$type = ( $success === false ) ? 'error' : 'success';
 		}
-		
+
 		add_settings_error(
 			'compilekit_alerts',
 			'compilekit_alert',
-			$message,
+			// Messages embed raw compiler/npm output; settings_errors() prints them unescaped.
+			wp_kses_post( $message ),
 			$type
 		);
 	}
@@ -225,22 +220,18 @@ class CompileKit_Admin {
 			
 			$mode = isset( $_POST['compilekit_compiler_mode'] )
 				? sanitize_text_field( wp_unslash( $_POST['compilekit_compiler_mode'] ) )
-				: 'auto';
-			
-			if ( ! in_array( $mode, array( 'auto', 'node', 'cli' ), true ) ) {
-				$mode = 'auto';
+				: 'node';
+
+			if ( $mode !== 'cli' ) {
+				$mode = 'node';
 			}
-			
+
 			update_option( 'compilekit_compiler_mode', $mode );
-			
-			if ( $mode === 'node' ) {
-				$active_compiler = __('Node.js (npm)', 'compilekit');
-			} elseif ( $mode === 'cli' ) {
-				$active_compiler = __('Tailwind Standalone CLI', 'compilekit');
-			} else {
-				$active_compiler = __('Auto', 'compilekit');
-			}
-			
+
+			$active_compiler = ( $mode === 'cli' )
+				? __( 'Tailwind Standalone CLI', 'compilekit' )
+				: __( 'Node.js (npm)', 'compilekit' );
+
 			$this->add_admin_notice_from_result( array(
 				'success' => true,
 				/* translators: %s: active compiler mode label (e.g. "Node.js (npm)") */
@@ -252,54 +243,41 @@ class CompileKit_Admin {
 			check_admin_referer( 'compilekit_run_manually' );
 			
 			$active_compiler = CompileKit_Environment::get_active_compiler();
-			$mode            = get_option( 'compilekit_compiler_mode', 'auto' );
-			
-			if ( $active_compiler === 'cli' ) {
-				$result = CompileKit_Compiler::compile_via_cli();
-				
-				// Auto mode: if Standalone CLI fails, try Node.js fallback (if installed).
+
+			if ( $active_compiler === 'cli' || $active_compiler === 'node' ) {
+				$is_cli = ( $active_compiler === 'cli' );
+				$result = $is_cli ? CompileKit_Compiler::compile_via_cli() : CompileKit_Compiler::compile_via_node();
+
+				// If the active compiler fails, try the other one (if installed).
 				$success = array_key_exists( 'success', $result ) ? $result['success'] : false; // true|false|null
-				
-				if ( $mode === 'auto' && $success === false ) {
-					$cli_message = (string) ( $result['message'] ?? '' );
-					
-					if ( CompileKit_Environment::node_modules_exists() ) {
-						$node = CompileKit_Compiler::compile_via_node();
-						$node_success = array_key_exists( 'success', $node ) ? $node['success'] : false; // true|false|null
-						
-						if ( $node_success === true || $node_success === null ) {
-							$result = $node;
-						} else {
-							$node_message = (string) ( $node['message'] ?? '' );
-							$result['message'] = sprintf(
-							/* translators: 1: original Standalone CLI message, 2: Node.js compiler message */
-								__( '%1$s<br><br>Node.js fallback failed:<br>%2$s', 'compilekit' ),
-								$cli_message,
-								$node_message
-							);
-						}
+
+				$fallback_exists = $is_cli
+					? CompileKit_Environment::node_modules_exists()
+					: CompileKit_Environment::standalone_executable_cli_exists();
+
+				if ( $success === false && $fallback_exists ) {
+					$failed_message   = (string) ( $result['message'] ?? '' );
+					$fallback         = $is_cli ? CompileKit_Compiler::compile_via_node() : CompileKit_Compiler::compile_via_cli();
+					$fallback_success = array_key_exists( 'success', $fallback ) ? $fallback['success'] : false; // true|false|null
+
+					if ( $fallback_success === true || $fallback_success === null ) {
+						$result = $fallback;
+					} else {
+						$result['message'] = sprintf(
+						/* translators: 1: message from the active compiler, 2: message from the fallback compiler */
+							__( '%1$s<br><br>Fallback compiler failed:<br>%2$s', 'compilekit' ),
+							$failed_message,
+							(string) ( $fallback['message'] ?? '' )
+						);
 					}
 				}
-				
+
 				$this->add_admin_notice_from_result( $result );
-				
-			} elseif ( $active_compiler === 'node' ) {
-				$result = CompileKit_Compiler::compile_via_node();
-				$this->add_admin_notice_from_result( $result );
-				
+
 			} else {
-				if ( $mode === 'node' ) {
-					$required_compiler = __('Install Tailwind Node.js packages first.', 'compilekit');
-				} elseif ( $mode === 'cli' ) {
-					$required_compiler = __('Download Tailwind Standalone CLI first.', 'compilekit');
-				} else {
-					$required_compiler = __('Download Tailwind Standalone CLI or Node.js (npm) packages first.', 'compilekit');
-				}
-				
 				$this->add_admin_notice_from_result( array(
 					'success' => false,
-					/* translators: %s: required dependency message (e.g. "Download Tailwind Standalone CLI first.") */
-					'message' => sprintf( __( 'Compiler not detected. %s', 'compilekit' ), $required_compiler ),
+					'message' => __( 'Compiler not detected. Download Tailwind Standalone CLI or Node.js (npm) packages first.', 'compilekit' ),
 				), 'warning' );
 			}
 		}
