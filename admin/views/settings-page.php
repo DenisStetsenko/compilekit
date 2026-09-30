@@ -14,6 +14,7 @@ $compilekit_node_modules_exists  = CompileKit_Environment::node_modules_exists()
 $compilekit_node_modules_version = CompileKit_Environment::get_node_modules_version();
 $compilekit_cli_exists           = CompileKit_Environment::standalone_executable_cli_exists();
 $compilekit_cli_version          = CompileKit_Environment::get_standalone_executable_cli_version();
+$compilekit_active_compiler      = CompileKit_Environment::get_active_compiler();
 
 settings_errors();
 ?>
@@ -226,11 +227,18 @@ settings_errors();
 					<path stroke-linecap="round" stroke-linejoin="round" d="M5.25 14.25h13.5m-13.5 0a3 3 0 0 1-3-3m3 3a3 3 0 1 0 0 6h13.5a3 3 0 1 0 0-6m-16.5-3a3 3 0 0 1 3-3h13.5a3 3 0 0 1 3 3m-19.5 0a4.5 4.5 0 0 1 .9-2.7L5.737 5.1a3.375 3.375 0 0 1 2.7-1.35h7.126c1.062 0 2.062.5 2.7 1.35l2.587 3.45a4.5 4.5 0 0 1 .9 2.7m0 0a3 3 0 0 1-3 3m0 3h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Zm-3 6h.008v.008h-.008v-.008Zm0-6h.008v.008h-.008v-.008Z" />
 				</svg>
 				<h2 class="m-0! text-2xl! font-medium! text-white!">
-					<?php echo wp_kses_post(
+					<?php
+					$compilekit_compiler_labels = array(
+						'node' => 'Node.js',
+						'cli'  => 'Standalone CLI',
+					);
+
+					echo wp_kses_post(
 						sprintf(
-							// translators: %s: The server path to the node_modules directory.
-							__( '%s Environment Actions:', 'compilekit' ),
-							'<span class="capitalize">' . $compilekit_current_environment . '</span>'
+							// translators: 1: environment name, 2: active compiler name (empty when no compiler is installed).
+							__( '%1$s Compiler: %2$s', 'compilekit' ),
+							'<span class="capitalize">' . $compilekit_current_environment . '</span>',
+							$compilekit_compiler_labels[ $compilekit_active_compiler ] ?? ''
 						) );
 					?>
 				</h2>
@@ -320,10 +328,8 @@ settings_errors();
 										<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
 									<?php endif; ?>
 								</svg>
-								<?php echo esc_html( $compilekit_cli_exists
-									? __( 'Reinstall Tailwind Standalone CLI', 'compilekit' )
-									: __( 'Download Tailwind Standalone CLI', 'compilekit' )
-								);
+								<?php echo esc_html( $compilekit_cli_exists ? __( 'Reinstall Tailwind Standalone CLI', 'compilekit' )
+																														: __( 'Download Tailwind Standalone CLI', 'compilekit' ) );
 								?>
 							</button>
 						</form>
@@ -356,10 +362,8 @@ settings_errors();
 										<path stroke-linecap="round" stroke-linejoin="round" d="M3 16.5v2.25A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75V16.5M16.5 12 12 16.5m0 0L7.5 12m4.5 4.5V3" />
 									<?php endif; ?>
 								</svg>
-								<?php echo esc_html( $compilekit_node_modules_exists
-									? __( 'Reinstall Tailwind Node.js packages', 'compilekit' )
-									: __( 'Install Tailwind Node.js packages', 'compilekit' )
-								);
+								<?php echo esc_html( $compilekit_node_modules_exists ? __( 'Reinstall Tailwind Node.js packages', 'compilekit' )
+																																		 : __( 'Install Tailwind Node.js packages', 'compilekit' ) );
 								?>
 							</button>
 						</form>
@@ -456,10 +460,8 @@ settings_errors();
 						
 						<div><h3 class="font-normal! text-base! m-0! inline-block!"><?php esc_html_e( 'Auto-Compilation', 'compilekit' ); ?></h3></div>
 						<div>
-							<?php echo wp_kses_post( $compilekit_run_on_refresh
-								? '<span class="badge badge-outline badge-soft badge-error">' . esc_html__( 'Enabled', 'compilekit' ) . '</span>'
-								: '<span class="badge ">' . esc_html__( 'Disabled', 'compilekit' ) . '</span>'
-							);
+							<?php echo wp_kses_post( $compilekit_run_on_refresh ? '<span class="badge badge-outline badge-soft badge-error">' . esc_html__( 'Enabled', 'compilekit' ) . '</span>'
+																																	: '<span class="badge ">' . esc_html__( 'Disabled', 'compilekit' ) . '</span>' );
 							?>
 						</div>
 					</li>
@@ -470,16 +472,15 @@ settings_errors();
 						</svg>
 						
 						<div class="flex gap-x-1.5">
-							<h3 class="font-normal! text-base! m-0! inline-block!"><?php esc_html_e( 'Standalone CLI Binary', 'compilekit' ); ?></h3>
+							<h3 class="font-normal! text-base! m-0! inline-block!"><?php esc_html_e( 'Standalone CLI', 'compilekit' ); ?></h3>
 							<?php if ( $compilekit_cli_exists && $compilekit_cli_version !== '' ) : ?>
 								<span class="badge badge-secondary badge-xs shrink-0"><?php echo esc_html( $compilekit_cli_version ); ?></span>
 							<?php endif; ?>
 						</div>
 						<div>
-							<?php echo wp_kses_post( $compilekit_cli_exists
-								? '<span class="badge badge-outline badge-soft badge-secondary">' . esc_html__( 'Installed', 'compilekit' ) . '</span>'
-								: '<span class="badge">' . esc_html__( 'Not Installed', 'compilekit' ) . '</span>'
-							);
+							<?php echo wp_kses_post( $compilekit_active_compiler === 'cli' ? '<span class="badge badge-outline badge-soft badge-success">' . esc_html__( 'Active', 'compilekit' ) . '</span>'
+																																						 : ( $compilekit_cli_exists ? '<span class="badge badge-outline badge-soft badge-secondary">' . esc_html__( 'Installed', 'compilekit' ) . '</span>'
+																																																				: '<span class="badge">' . esc_html__( 'Not Installed', 'compilekit' ) . '</span>' ) );
 							?>
 						</div>
 					</li>
@@ -495,10 +496,9 @@ settings_errors();
 							<?php endif; ?>
 						</div>
 						<div>
-							<?php echo wp_kses_post( $compilekit_node_modules_exists
-								? '<span class="badge badge-outline badge-soft badge-secondary">' . esc_html__( 'Installed', 'compilekit' ) . '</span>'
-								: '<span class="badge">' . esc_html__( 'Not Installed', 'compilekit' ) . '</span>'
-							);
+							<?php echo wp_kses_post( $compilekit_active_compiler === 'node' ? '<span class="badge badge-outline badge-soft badge-success">' . esc_html__( 'Active', 'compilekit' ) . '</span>'
+																																							: ( $compilekit_node_modules_exists ? '<span class="badge badge-outline badge-soft badge-secondary">' . esc_html__( 'Installed', 'compilekit' ) . '</span>'
+																																																									: '<span class="badge">' . esc_html__( 'Not Installed', 'compilekit' ) . '</span>' ) );
 							?>
 						</div>
 					</li>

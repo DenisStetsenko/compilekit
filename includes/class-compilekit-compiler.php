@@ -325,6 +325,12 @@ class CompileKit_Compiler {
 
 			// Binary started cleanly — cache the signature to skip this check next time.
 			set_transient( COMPILEKIT_TRANSIENT_PREFLIGHT, $preflight_sig, DAY_IN_SECONDS );
+
+			// Record the CLI version from the same --help output (covers a failed detection at download time).
+			$cli_version = CompileKit_Environment::parse_standalone_executable_cli_version( (string) $dry_run['output'] );
+			if ( $cli_version !== '' ) {
+				set_transient( COMPILEKIT_TRANSIENT_CLI_VERSION, $cli_version );
+			}
 		}
 		
 		

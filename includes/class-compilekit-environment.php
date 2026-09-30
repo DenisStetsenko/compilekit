@@ -334,22 +334,33 @@ class CompileKit_Environment {
 	
 	
 	/**
-	 * Detects the version of a standalone executable CLI by running the binary with the `--version` flag.
+	 * Detects the version of a standalone executable CLI from the `--help` header ("≈ tailwindcss vX.Y.Z").
+	 * Tailwind v4 has no `--version` flag: it ignores it and starts a build instead.
 	 */
 	private static function detect_standalone_executable_cli_version( string $binary_path ) : string {
 		if ( ! CompileKit_Helpers::process_runner_init() ) {
 			return '';
 		}
 		
-		$cmd = escapeshellarg( $binary_path ) . ' --version';
+		$cmd = escapeshellarg( $binary_path ) . ' --help';
 		
 		$os = PHP_OS_FAMILY;
 		if ( $os === 'Windows' ) {
 			$cmd = 'cmd /c ' . $cmd;
 		}
 		
-		$run = CompileKit_Helpers::process_runner( $cmd );
-		$out = isset( $run['output'] ) ? trim( (string) $run['output'] ) : '';
+		$run = CompileKit_Helpers::process_runner( $cmd, COMPILEKIT_COMPILE_TIMEOUT );
+		
+		return self::parse_standalone_executable_cli_version( isset( $run['output'] ) ? (string) $run['output'] : '' );
+	}
+	
+	
+	/**
+	 * Extracts the CLI version from `--help` output. Also used by the compile pre-flight check,
+	 * which runs `--help` anyway, so the version gets recorded without spawning an extra process.
+	 */
+	public static function parse_standalone_executable_cli_version( string $out ) : string {
+		$out = trim( $out );
 		
 		if ( $out === '' ) {
 			return '';
@@ -414,6 +425,7 @@ class CompileKit_Environment {
 		// Force cleanup old file
 		if ( $force && $fs->exists( $final_path ) ) {
 			$fs->delete( $final_path );
+			delete_transient( COMPILEKIT_TRANSIENT_CLI_VERSION );
 		}
 		
 		// Detect correct upstream asset filename for this OS/arch/libc

@@ -2,9 +2,9 @@
 Contributors: mstrdh
 Tags: theme, tailwind, css, cli, compiler
 Requires at least: 6.0
-Tested up to: 7.0.3
+Tested up to: 7.1.2
 Requires PHP: 7.4
-Stable tag: 3.0.5
+Stable tag: 3.0.6
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -31,6 +31,11 @@ An HTTPS request to GitHub is made only when an admin clicks “Download Tailwin
 
 
 == Changelog ==
+
+= 3.0.6 =
+* The compiler section header now shows the active compiler (e.g. "Local Compiler: Node.js"), and System Info marks the active compiler with an "Active" badge.
+* Fixed the Standalone CLI version badge not showing: the version is now read from the CLI help header (Tailwind v4 has no --version flag) and also recorded by the compile pre-flight check if it was not recorded at download time.
+* Tested up to WordPress 7.1.2.
 
 = 3.0.5 =
 * Tested up to WordPress 7.0.3.
