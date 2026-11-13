@@ -85,11 +85,24 @@ class CompileKit_Environment {
 	
 	
 	/**
-	 * Downloads Tailwind CSS npm packages to wp-content/uploads/compilekit/node_modules
+	 * On plugin activation, writes package.json with the Tailwind devDependencies (no node_modules),
+	 * so IDEs detect Tailwind before the packages are installed.
+	 */
+	public static function create_package_json() : void {
+		if ( ! file_exists( CompileKit_Helpers::compilekit_modules_dir() . 'package.json' ) ) {
+			self::install_node_modules( true );
+		}
+	}
+
+
+	/**
+	 * Installs Tailwind CSS npm packages to wp-content/uploads/compilekit/node_modules
 	 *
 	 * This allows IDEs like PHPStorm to read the package files and provide autocomplete
+	 *
+	 * @param bool $lock_only Only write package.json, skip node_modules and package-lock.json.
 	 */
-	public static function download_node_modules() : array {
+	public static function install_node_modules( bool $lock_only = false ) : array {
 		if ( ! CompileKit_Helpers::process_runner_init() ) {
 			return array(
 				'success' => false,
@@ -199,14 +212,29 @@ class CompileKit_Environment {
 			}
 			
 			// run NPM install
-			$command = 'npm install -D tailwindcss @tailwindcss/cli @tailwindcss/forms @tailwindcss/typography --no-audit --no-fund --ignore-scripts';
-			$result  = CompileKit_Helpers::process_runner( $command );
+			$command = 'npm install -D tailwindcss @tailwindcss/cli @tailwindcss/forms @tailwindcss/typography --no-audit --no-fund --ignore-scripts' . ( $lock_only ? ' --package-lock-only' : '' );
 			
+			// Neither activation nor the Install button may hang when the npm registry is unreachable.
+			$timeout = $lock_only ? 60 : 300;
+			$result  = CompileKit_Helpers::process_runner( $command, $timeout );
+
 			// Restore original directory
 			if ( $did_chdir && $old_cwd !== false ) {
 				chdir( $old_cwd );
 			}
-			
+
+			if ( $lock_only ) {
+				// Delete package-lock.json so later installs are not pinned to today's package versions.
+				if ( $fs->exists( $compilekit_dir . 'package-lock.json' ) ) {
+					$fs->delete( $compilekit_dir . 'package-lock.json', false );
+				}
+
+				return array(
+					'success' => $result['success'] !== false,
+					'message' => (string) $result['output'],
+				);
+			}
+
 			// Check IF node_modules/tailwindcss/ exists and $result is NOT FALSE.
 			if ( ( $result['success'] === true || $result['success'] === null ) && self::node_modules_exists() ) {
 				
@@ -222,7 +250,15 @@ class CompileKit_Environment {
 					'path'    => $node_modules_dir,
 				);
 			}
-			
+
+			if ( ! empty( $result['timed_out'] ) ) {
+				return array(
+					'success' => false,
+					// translators: %d: Timeout in seconds.
+					'message' => sprintf( __( 'npm install timed out after %d seconds.', 'compilekit' ), $timeout ),
+				);
+			}
+
 			return array(
 				'success' => false,
 				// translators: %s: List of package names that failed to install.
@@ -246,7 +282,6 @@ class CompileKit_Environment {
 	public static function remove_node_modules() : array {
 		$compilekit_dir = CompileKit_Helpers::compilekit_modules_dir();
 		$node_modules   = $compilekit_dir . 'node_modules/';
-		$package_json   = $compilekit_dir . 'package.json';
 		$package_lock   = $compilekit_dir . 'package-lock.json';
 		
 		// Initialize WordPress Filesystem API
@@ -275,13 +310,8 @@ class CompileKit_Environment {
 			$ok      = $ok && $deleted;
 		}
 		
-		// package.json
-		if ( $fs->exists( $package_json ) ) {
-			$had_any = true;
-			$deleted = $fs->delete( $package_json, false );
-			$ok      = $ok && $deleted;
-		}
-		
+		// package.json stays: IDEs (PhpStorm) detect Tailwind from it.
+
 		if ( ! $had_any ) {
 			return array(
 				'success' => true,
@@ -295,7 +325,7 @@ class CompileKit_Environment {
 			
 			return array(
 				'success' => true,
-				'message' => __( 'Successfully removed Tailwind npm packages (node_modules and package files).', 'compilekit' ),
+				'message' => __( 'Successfully removed Tailwind npm packages (node_modules and package-lock.json).', 'compilekit' ),
 			);
 		}
 		

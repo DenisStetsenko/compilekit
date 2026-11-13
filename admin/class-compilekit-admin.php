@@ -57,7 +57,8 @@ class CompileKit_Admin {
 			'compilekit_alerts',
 			'compilekit_alert',
 			// Messages embed raw compiler/npm output; settings_errors() prints them unescaped.
-			wp_kses_post( $message ),
+			// nl2br: keep multi-line output readable inside the notice <p>.
+			wp_kses_post( nl2br( $message ) ),
 			$type
 		);
 	}
@@ -142,7 +143,7 @@ class CompileKit_Admin {
 				'compilekit_download_cli'       => __( 'Downloading Tailwind Standalone CLI…', 'compilekit' ),
 				'compilekit_download_cli_force' => __( 'Reinstalling Tailwind Standalone CLI…', 'compilekit' ),
 				'compilekit_remove_cli'         => __( 'Removing Tailwind Standalone CLI…', 'compilekit' ),
-				'compilekit_download_modules'   => __( 'Installing Tailwind Node.js packages…', 'compilekit' ),
+				'compilekit_install_modules'    => __( 'Installing Tailwind Node.js packages…', 'compilekit' ),
 				'compilekit_remove_modules'     => __( 'Removing Tailwind Node.js packages…', 'compilekit' ),
 				'compilekit_run_manually'       => __( 'Compiling CSS…', 'compilekit' ),
 			),
@@ -184,10 +185,10 @@ class CompileKit_Admin {
 			return;
 		}
 		
-		// Download Node.js npm packages
-		if ( isset( $_POST['compilekit_download_modules'] ) ) {
-			check_admin_referer( 'compilekit_download_modules' );
-			$result = CompileKit_Environment::download_node_modules();
+		// Install Node.js npm packages
+		if ( isset( $_POST['compilekit_install_modules'] ) ) {
+			check_admin_referer( 'compilekit_install_modules' );
+			$result = CompileKit_Environment::install_node_modules();
 			$this->add_admin_notice_from_result( $result );
 			
 		} elseif ( isset( $_POST['compilekit_remove_modules'] ) ) {
@@ -299,7 +300,7 @@ class CompileKit_Admin {
 	 * Scans the theme's assets directory for CSS files and returns an array of paths.
 	 *
 	 * This method looks for all the .css files in the current theme.
-	 * It generates a list of paths relative to the WordPress root directory and assigns
+	 * It generates a list of paths relative to the active theme directory and assigns
 	 * human-readable labels for use in the UI.
 	 *
 	 * @return array
@@ -339,7 +340,7 @@ class CompileKit_Admin {
 				continue;
 			}
 			
-			// ABSPATH-relative value (this is what you should save in your option)
+			// Skip files outside the theme directory
 			if ( strpos( $full_path, $theme_dir ) !== 0 ) {
 				continue;
 			}

@@ -2,7 +2,9 @@
 
 const gulp 				 = require('gulp');
 const browserSync  = require('browser-sync').create();
-const domain			 = 'dev-tailwind-wp-theme.local';
+const project			 = 'wp-dev-tailwind'; // DDEV project name
+const domain			 = project + '.ddev.site';
+const certsDir		 = require('os').homedir() + '/.ddev/traefik/certs/'; // DDEV (mkcert) site certificates
 const { spawn } 	 = require('child_process');
 const { exec } 		 = require('child_process');
 const handleErrors = err => console.error(err);
@@ -39,8 +41,8 @@ const browserSyncOptions = {
 		whitelist: [ "/wp-admin/admin-ajax.php" ],
 	},
 	https: {
-		key: "/Applications/MAMP/Library/OpenSSL/certs/" + domain + ".key",
-		cert: "/Applications/MAMP/Library/OpenSSL/certs/" + domain + ".crt"
+		key: certsDir + project + ".key",
+		cert: certsDir + project + ".crt"
 	}
 };
 

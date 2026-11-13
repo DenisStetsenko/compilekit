@@ -2,20 +2,20 @@
 Contributors: mstrdh
 Tags: theme, tailwind, css, cli, compiler
 Requires at least: 6.0
-Tested up to: 7.1.2
+Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.6
+Stable tag: 3.0.7
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
 Compile Tailwind CSS with a server-side compiler. Provides an admin UI, auto-compilation mode, and environment-aware output.
 
 == Description ==
-*	Compiles Tailwind CSS v4 directly on the server.
-*	Choose a compiler: Standalone CLI binary or Node.js (npm) packages.
-*	Run compilation manually from the Admin UI or enable Auto-Compilation Mode for front-end refresh builds.
-*	Configure input and output CSS paths inside the active theme.
-*	Environment-aware output: Local/Staging is unminified (optional source maps), Live is minified.
+* Compiles Tailwind CSS v4 directly on the server.
+* Choose a compiler: Standalone CLI binary or Node.js (npm) packages.
+* Run compilation manually from the Admin UI or enable Auto-Compilation Mode for front-end refresh builds.
+* Configure input and output CSS paths inside the active theme.
+* Environment-aware output: Local/Staging is unminified (optional source maps), Live is minified.
 
 
 == Installation ==
@@ -28,9 +28,19 @@ Compile Tailwind CSS with a server-side compiler. Provides an admin UI, auto-com
 == External services ==
 This plugin can connect to GitHub to download the Tailwind Standalone CLI binary when requested in the admin UI.
 An HTTPS request to GitHub is made only when an admin clicks “Download Tailwind Standalone CLI” or “Reinstall Tailwind Standalone CLI”. The request uses the user-agent “WordPress/compilekit”. Learn more about [privacy policy](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) and [terms of service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service).
+If npm is available on the server, the plugin also runs npm, which connects to the npm registry (registry.npmjs.org) to resolve the Tailwind packages (tailwindcss, @tailwindcss/cli, @tailwindcss/forms, @tailwindcss/typography). This happens once on plugin activation, to write package.json, and when an admin clicks “Install Tailwind Node.js packages” or “Reinstall Tailwind Node.js packages”. Only the package names and npm’s standard request data are sent. Learn more about npm’s [privacy policy](https://docs.npmjs.com/policies/privacy) and [terms of use](https://docs.npmjs.com/policies/terms).
 
 
 == Changelog ==
+
+= 3.0.7 =
+* On activation, the plugin now writes package.json with the Tailwind npm packages (without installing them), so code editors detect Tailwind right away. Requires npm on the server; without it, activation proceeds as before.
+* "Delete Tailwind Node.js packages" now keeps package.json and removes only node_modules and package-lock.json, so the next install fetches the latest package versions.
+* The npm package install now stops after 5 minutes with a clear message instead of hanging when the npm registry is unreachable.
+* Multi-line compiler and npm output in admin notices is now shown line by line.
+* Fixed the input and output CSS path placeholders: paths are relative to the active theme.
+* Fixed the "Run on refresh" label not being linked to its checkbox.
+* Documented the npm registry connection in the External services section.
 
 = 3.0.6 =
 * The compiler section header now shows the active compiler (e.g. "Local Compiler: Node.js"), and System Info marks the active compiler with an "Active" badge.

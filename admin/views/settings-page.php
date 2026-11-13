@@ -72,7 +72,7 @@ settings_errors();
 							<?php else: ?>
 								<input type="text" name="compilekit_input_css" id="compilekit_input_css"
 								       value="<?php echo esc_attr( $compilekit_current_input ); ?>" class="input w-full"
-								       placeholder="<?php echo esc_attr__( 'wp-content/themes/your-theme/assets/css/input.css', 'compilekit' ); ?>">
+								       placeholder="<?php echo esc_attr__( 'assets/css/input.css', 'compilekit' ); ?>">
 							<?php endif; ?>
 							
 							<p class="label block!"><?php echo wp_kses_post(
@@ -101,7 +101,7 @@ settings_errors();
 							<?php else: ?>
 								<input type="text" name="compilekit_output_css" id="compilekit_output_css"
 								       value="<?php echo esc_attr( $compilekit_current_output ); ?>" class="input w-full"
-								       placeholder="<?php echo esc_attr__( 'wp-content/themes/your-theme/assets/css/output.css', 'compilekit' ); ?>">
+								       placeholder="<?php echo esc_attr__( 'assets/css/output.css', 'compilekit' ); ?>">
 							<?php endif; ?>
 								<p class="label"><?php esc_html_e( 'The compiled CSS will be saved to this file.', 'compilekit' ); ?></p>
 						</fieldset>
@@ -138,7 +138,7 @@ settings_errors();
 						
 						<?php if ( !empty( $compilekit_current_input ) && !empty( $compilekit_current_output ) ) : ?>
 							<fieldset class="fieldset">
-								<label for="compilekit_environment" class="fieldset-label mb-2">
+								<label for="compilekit_run_on_refresh" class="fieldset-label mb-2">
 									<?php esc_html_e( 'Auto-Compilation Mode', 'compilekit' ); ?>
 								</label>
 								
@@ -352,8 +352,8 @@ settings_errors();
 				
 					<div class="flex flex-wrap gap-x-5 gap-y-4">
 						<form method="post" action="<?php echo esc_url( admin_url( 'admin.php?page=compilekit' ) ); ?>">
-							<?php wp_nonce_field( 'compilekit_download_modules' ); ?>
-							<button type="submit" name="compilekit_download_modules"
+							<?php wp_nonce_field( 'compilekit_install_modules' ); ?>
+							<button type="submit" name="compilekit_install_modules"
 							        class="btn <?php echo $compilekit_node_modules_exists ? '' : 'btn-soft btn-success' ?> font-medium! text-[15px]!">
 								<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.7" stroke="currentColor" class="size-4.5">
 									<?php if ( $compilekit_node_modules_exists ) : ?>
