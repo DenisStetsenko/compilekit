@@ -2,8 +2,8 @@
 /**
  * Plugin Name: CompileKit - Tailwind CSS Compiler
  * Description: Compile Tailwind CSS with a server-side compiler. Provides an admin UI, auto-compilation mode, and environment-aware output.
- * Version: 3.0.7
- * Author: Denis Stetsenko
+ * Version: 3.0.8
+ * Author: Denys Stetsenko
  * Author URI: https://github.com/DenisStetsenko/
  * Plugin URI: https://github.com/DenisStetsenko/compilekit
  * License: GPLv2 or later
@@ -16,7 +16,7 @@ if ( !defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'COMPILEKIT_VERSION', '3.0.7' );
+define( 'COMPILEKIT_VERSION', '3.0.8' );
 define( 'COMPILEKIT_PATH', plugin_dir_path( __FILE__ ) );
 define( 'COMPILEKIT_URL', plugin_dir_url( __FILE__ ) );
 define( 'COMPILEKIT_WORKER_THREADS_DEFAULT', 33 );
@@ -37,7 +37,3 @@ require_once COMPILEKIT_PATH . 'includes/class-compilekit-helpers.php';
 require_once COMPILEKIT_PATH . 'includes/class-compilekit-compiler.php';
 require_once COMPILEKIT_PATH . 'includes/class-compilekit-environment.php';
 require_once COMPILEKIT_PATH . 'admin/class-compilekit-admin.php';
-
-// On activation, write package.json with the Tailwind devDependencies (no node_modules), so IDEs detect Tailwind.
-// Must stay in the main plugin file: __FILE__ forms the hook name 'activate_compilekit/compilekit.php'.
-register_activation_hook( __FILE__, array( 'CompileKit_Environment', 'create_package_json' ) );

@@ -85,24 +85,11 @@ class CompileKit_Environment {
 	
 	
 	/**
-	 * On plugin activation, writes package.json with the Tailwind devDependencies (no node_modules),
-	 * so IDEs detect Tailwind before the packages are installed.
-	 */
-	public static function create_package_json() : void {
-		if ( ! file_exists( CompileKit_Helpers::compilekit_modules_dir() . 'package.json' ) ) {
-			self::install_node_modules( true );
-		}
-	}
-
-
-	/**
 	 * Installs Tailwind CSS npm packages to wp-content/uploads/compilekit/node_modules
 	 *
 	 * This allows IDEs like PHPStorm to read the package files and provide autocomplete
-	 *
-	 * @param bool $lock_only Only write package.json, skip node_modules and package-lock.json.
 	 */
-	public static function install_node_modules( bool $lock_only = false ) : array {
+	public static function install_node_modules() : array {
 		if ( ! CompileKit_Helpers::process_runner_init() ) {
 			return array(
 				'success' => false,
@@ -211,28 +198,16 @@ class CompileKit_Environment {
 				$did_chdir = true;
 			}
 			
-			// run NPM install
-			$command = 'npm install -D tailwindcss @tailwindcss/cli @tailwindcss/forms @tailwindcss/typography --no-audit --no-fund --ignore-scripts' . ( $lock_only ? ' --package-lock-only' : '' );
-			
-			// Neither activation nor the Install button may hang when the npm registry is unreachable.
-			$timeout = $lock_only ? 60 : 300;
+			// run NPM install; @latest so Reinstall upgrades past versions pinned by package-lock.json
+			$command = 'npm install -D tailwindcss@latest @tailwindcss/cli@latest @tailwindcss/forms@latest @tailwindcss/typography@latest --no-audit --no-fund --ignore-scripts';
+
+			// The Install button must not hang when the npm registry is unreachable.
+			$timeout = 300;
 			$result  = CompileKit_Helpers::process_runner( $command, $timeout );
 
 			// Restore original directory
 			if ( $did_chdir && $old_cwd !== false ) {
 				chdir( $old_cwd );
-			}
-
-			if ( $lock_only ) {
-				// Delete package-lock.json so later installs are not pinned to today's package versions.
-				if ( $fs->exists( $compilekit_dir . 'package-lock.json' ) ) {
-					$fs->delete( $compilekit_dir . 'package-lock.json', false );
-				}
-
-				return array(
-					'success' => $result['success'] !== false,
-					'message' => (string) $result['output'],
-				);
 			}
 
 			// Check IF node_modules/tailwindcss/ exists and $result is NOT FALSE.
@@ -261,7 +236,7 @@ class CompileKit_Environment {
 
 			return array(
 				'success' => false,
-				// translators: %s: List of package names that failed to install.
+				// translators: %s: npm output.
 				'message' => sprintf( __( "Failed to install packages:\n%s", 'compilekit' ), esc_html( (string) $result['output'] ) ),
 			);
 			
@@ -282,6 +257,7 @@ class CompileKit_Environment {
 	public static function remove_node_modules() : array {
 		$compilekit_dir = CompileKit_Helpers::compilekit_modules_dir();
 		$node_modules   = $compilekit_dir . 'node_modules/';
+		$package_json   = $compilekit_dir . 'package.json';
 		$package_lock   = $compilekit_dir . 'package-lock.json';
 		
 		// Initialize WordPress Filesystem API
@@ -310,7 +286,12 @@ class CompileKit_Environment {
 			$ok      = $ok && $deleted;
 		}
 		
-		// package.json stays: IDEs (PhpStorm) detect Tailwind from it.
+		// package.json
+		if ( $fs->exists( $package_json ) ) {
+			$had_any = true;
+			$deleted = $fs->delete( $package_json, false );
+			$ok      = $ok && $deleted;
+		}
 
 		if ( ! $had_any ) {
 			return array(
@@ -325,7 +306,7 @@ class CompileKit_Environment {
 			
 			return array(
 				'success' => true,
-				'message' => __( 'Successfully removed Tailwind npm packages (node_modules and package-lock.json).', 'compilekit' ),
+				'message' => __( 'Successfully removed Tailwind npm packages (node_modules and package files).', 'compilekit' ),
 			);
 		}
 		
@@ -451,13 +432,7 @@ class CompileKit_Environment {
 				'path'    => $final_path,
 			);
 		}
-		
-		// Force cleanup old file
-		if ( $force && $fs->exists( $final_path ) ) {
-			$fs->delete( $final_path );
-			delete_transient( COMPILEKIT_TRANSIENT_CLI_VERSION );
-		}
-		
+
 		// Detect correct upstream asset filename for this OS/arch/libc
 		$upstream_filename = CompileKit_Helpers::tailwind_standalone_filename();
 		if ( $upstream_filename === '' ) {
@@ -506,27 +481,6 @@ class CompileKit_Environment {
 		}
 		
 		$code = (int) wp_remote_retrieve_response_code( $response );
-		
-		if ( $code === 403 ) {
-			$headers        = wp_remote_retrieve_headers($response);
-			$rate_limit     = isset($headers['x-ratelimit-limit']) ? (int) $headers['x-ratelimit-limit'] : null;
-			$rate_reset     = isset($headers['x-ratelimit-reset']) ? gmdate('F j, Y H:i:s', (int) $headers['x-ratelimit-reset']) : null;
-			$cleanup_temp();
-			
-			return array(
-				'success' => false,
-				'message' => sprintf(
-				/* translators: %1$s: rate limit, %2$s: rate reset */
-					__('Error: GitHub API rate limit exceeded. %1$s', 'compilekit'),
-					$rate_limit && $rate_reset ? sprintf(
-					/* translators: %1$d: rate limit, %2$s: rate reset time */
-						__('Limit: %1$d requests. Resets at %2$s UTC.', 'compilekit'),
-						$rate_limit,
-						$rate_reset
-					) : __('Please try again later.', 'compilekit')
-				),
-			);
-		}
 		
 		if ( $code === 404 ) {
 			$cleanup_temp();
@@ -587,6 +541,9 @@ class CompileKit_Environment {
 				'message' => __( 'Failed to move Tailwind CLI into place.', 'compilekit' ),
 			);
 		}
+
+		// The old version no longer applies once the new binary is in place.
+		delete_transient( COMPILEKIT_TRANSIENT_CLI_VERSION );
 
 		// Make executable on Unix
 		if ( $os !== 'Windows' ) {

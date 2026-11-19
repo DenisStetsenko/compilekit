@@ -237,7 +237,7 @@ settings_errors();
 						sprintf(
 							// translators: 1: environment name, 2: active compiler name (empty when no compiler is installed).
 							__( '%1$s Compiler: %2$s', 'compilekit' ),
-							'<span class="capitalize">' . $compilekit_current_environment . '</span>',
+							'<span class="capitalize">' . esc_html( $compilekit_current_environment ) . '</span>',
 							$compilekit_compiler_labels[ $compilekit_active_compiler ] ?? ''
 						) );
 					?>
@@ -268,12 +268,12 @@ settings_errors();
 					<fieldset class="text-base flex flex-wrap gap-x-6 gap-y-4 items-center xl:gap-x-8">
 						<label class="label">
 							<input type="radio" name="compilekit_compiler_mode" class="radio radio-secondary" value="node" <?php checked( $compilekit_compiler_mode, 'node' ); ?>/>
-							Node.js (npm)
+							<?php esc_html_e( 'Node.js (npm)', 'compilekit' ); ?>
 						</label>
 						
 						<label class="label">
 							<input type="radio" name="compilekit_compiler_mode" class="radio radio-secondary" value="cli" <?php checked( $compilekit_compiler_mode, 'cli' ); ?>/>
-							CLI (standalone executable)
+							<?php esc_html_e( 'CLI (standalone executable)', 'compilekit' ); ?>
 						</label>
 					</fieldset>
 					

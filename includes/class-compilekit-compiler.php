@@ -6,7 +6,8 @@ if ( !defined( 'ABSPATH' ) ) {
 class CompileKit_Compiler {
 	
 	public function __construct() {
-		add_action( 'init', array($this, 'run_compiler_on_refresh') );
+		// template_redirect fires only for front-end page loads, so REST requests (block editor) never wait for a compile.
+		add_action( 'template_redirect', array($this, 'run_compiler_on_refresh') );
 	}
 	
 	/**
@@ -154,6 +155,24 @@ class CompileKit_Compiler {
 
 		// Rebuild output path from the verified real directory.
 		$output_abs = $output_dir_real . basename( $output_abs );
+
+		// The compile would overwrite the Tailwind source.
+		if ( $output_abs === $input_real_norm ) {
+			return array(
+				'success'  => false,
+				'message'  => __( 'Output CSS file must differ from the input CSS file.', 'compilekit' ),
+				'resolved' => array(),
+			);
+		}
+
+		// The compile would wipe the theme header and break the theme.
+		if ( $output_abs === $theme_root . 'style.css' ) {
+			return array(
+				'success'  => false,
+				'message'  => __( 'Output CSS file must not be the theme style.css.', 'compilekit' ),
+				'resolved' => array(),
+			);
+		}
 
 		return array(
 			'success'  => true,
@@ -707,15 +726,14 @@ class CompileKit_Compiler {
 		}
 		
 		// Skip non-page loads
-		if ( ( defined( 'REST_REQUEST' ) && REST_REQUEST )
-		     || ( defined( 'DOING_CRON' ) && DOING_CRON )
+		if ( ( defined( 'DOING_CRON' ) && DOING_CRON )
 		     || ( defined( 'WP_CLI' ) && WP_CLI )
 		     || wp_doing_ajax() ) {
 			return;
 		}
 		
 		// Admin-only trigger
-		if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+		if ( ! is_user_logged_in() || ! current_user_can( 'install_plugins' ) ) {
 			return;
 		}
 		
@@ -731,7 +749,8 @@ class CompileKit_Compiler {
 		// Throttle to avoid repeated compiles on asset requests / multiple hits.
 		// The guard TTL must outlive a slow build so concurrent requests can't start
 		// an overlapping compile while this one is still running.
-		$lock_key = 'compilekit_compile_lock_' . $user_id;
+		// One site-wide key: two admins refreshing at once must not compile into the same output file.
+		$lock_key = 'compilekit_compile_lock';
 		if ( get_transient( $lock_key ) ) {
 			return;
 		}

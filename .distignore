@@ -3,6 +3,7 @@
 .github/
 .vscode/
 .idea/
+.claude/
 node_modules/
 .DS_Store
 .prettierignore

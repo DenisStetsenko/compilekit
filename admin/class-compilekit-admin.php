@@ -20,7 +20,7 @@ class CompileKit_Admin {
 	 * @return void
 	 */
 	public function handle_compile_alerts() : void {
-		if ( ! current_user_can( 'manage_options' ) ) {
+		if ( ! current_user_can( 'install_plugins' ) ) {
 			return;
 		}
 		
@@ -34,7 +34,7 @@ class CompileKit_Admin {
 		}
 		
 		echo '<div class="notice notice-warning"><p><strong>'
-		     . esc_html__( 'Auto-Compilation Mode is currently ACTIVE. Turn it OFF when finish making changes.', 'compilekit' )
+		     . esc_html__( 'Auto-Compilation Mode is currently ACTIVE. Turn it OFF when you finish making changes.', 'compilekit' )
 		     . '</strong></p></div>';
 	}
 	
@@ -71,7 +71,8 @@ class CompileKit_Admin {
 		add_menu_page(
 			'CompileKit',
 			'CompileKit',
-			'manage_options',
+			// install_plugins: the plugin downloads binaries and runs server processes; core denies it under DISALLOW_FILE_MODS and to multisite site admins.
+			'install_plugins',
 			'compilekit',
 			array($this, 'compilekit_settings_page'),
 			COMPILEKIT_URL . 'assets/img/icon.png'
@@ -176,7 +177,7 @@ class CompileKit_Admin {
 	 * Handle environment-specific actions like downloading or removing node_modules
 	 */
 	public function handle_environment_actions() : void {
-		if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) ) {
+		if ( ! is_user_logged_in() || ! current_user_can( 'install_plugins' ) ) {
 			return;
 		}
 		
@@ -256,7 +257,8 @@ class CompileKit_Admin {
 					? CompileKit_Environment::node_modules_exists()
 					: CompileKit_Environment::standalone_executable_cli_exists();
 
-				if ( $success === false && $fallback_exists ) {
+				// Path errors are shared by both compilers: a fallback run would only repeat them.
+				if ( $success === false && $fallback_exists && CompileKit_Compiler::resolve_compile_paths()['success'] ) {
 					$failed_message   = (string) ( $result['message'] ?? '' );
 					$fallback         = $is_cli ? CompileKit_Compiler::compile_via_node() : CompileKit_Compiler::compile_via_cli();
 					$fallback_success = array_key_exists( 'success', $fallback ) ? $fallback['success'] : false; // true|false|null
@@ -266,7 +268,7 @@ class CompileKit_Admin {
 					} else {
 						$result['message'] = sprintf(
 						/* translators: 1: message from the active compiler, 2: message from the fallback compiler */
-							__( '%1$s<br><br>Fallback compiler failed:<br>%2$s', 'compilekit' ),
+							__( "%1\$s\n\nFallback compiler failed:\n%2\$s", 'compilekit' ),
 							$failed_message,
 							(string) ( $fallback['message'] ?? '' )
 						);
@@ -316,8 +318,11 @@ class CompileKit_Admin {
 		$files           = array();
 		$theme_style_css = wp_normalize_path( $theme_dir . 'style.css' );
 		
+		// CATCH_GET_CHILD: skip unreadable subdirectories instead of throwing UnexpectedValueException.
 		$iterator = new RecursiveIteratorIterator(
-			new RecursiveDirectoryIterator( $theme_dir, FilesystemIterator::SKIP_DOTS )
+			new RecursiveDirectoryIterator( $theme_dir, FilesystemIterator::SKIP_DOTS ),
+			RecursiveIteratorIterator::LEAVES_ONLY,
+			RecursiveIteratorIterator::CATCH_GET_CHILD
 		);
 
 		// Limit nesting depth: list entry files (e.g. assets/styles/src/input.css)
@@ -363,7 +368,7 @@ class CompileKit_Admin {
 	 * @param WP_Admin_Bar $wp_admin_bar Instance of the WordPress admin bar.
 	 */
 	public function compilekit_admin_bar( \WP_Admin_Bar $wp_admin_bar ) : void {
-		if ( ! is_user_logged_in() || ! current_user_can( 'manage_options' ) || is_admin() ) {
+		if ( ! is_user_logged_in() || ! current_user_can( 'install_plugins' ) || is_admin() ) {
 			return;
 		}
 		

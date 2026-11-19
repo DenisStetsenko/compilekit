@@ -4,7 +4,7 @@ Tags: theme, tailwind, css, cli, compiler
 Requires at least: 6.0
 Tested up to: 7.1
 Requires PHP: 7.4
-Stable tag: 3.0.7
+Stable tag: 3.0.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 
@@ -15,7 +15,7 @@ Compile Tailwind CSS with a server-side compiler. Provides an admin UI, auto-com
 * Choose a compiler: Standalone CLI binary or Node.js (npm) packages.
 * Run compilation manually from the Admin UI or enable Auto-Compilation Mode for front-end refresh builds.
 * Configure input and output CSS paths inside the active theme.
-* Environment-aware output: Local/Staging is unminified (optional source maps), Live is minified.
+* Environment-aware output: Local is unminified with a source map, Staging is unminified, Live is minified.
 
 
 == Installation ==
@@ -28,10 +28,25 @@ Compile Tailwind CSS with a server-side compiler. Provides an admin UI, auto-com
 == External services ==
 This plugin can connect to GitHub to download the Tailwind Standalone CLI binary when requested in the admin UI.
 An HTTPS request to GitHub is made only when an admin clicks “Download Tailwind Standalone CLI” or “Reinstall Tailwind Standalone CLI”. The request uses the user-agent “WordPress/compilekit”. Learn more about [privacy policy](https://docs.github.com/en/site-policy/privacy-policies/github-privacy-statement) and [terms of service](https://docs.github.com/en/site-policy/github-terms/github-terms-of-service).
-If npm is available on the server, the plugin also runs npm, which connects to the npm registry (registry.npmjs.org) to resolve the Tailwind packages (tailwindcss, @tailwindcss/cli, @tailwindcss/forms, @tailwindcss/typography). This happens once on plugin activation, to write package.json, and when an admin clicks “Install Tailwind Node.js packages” or “Reinstall Tailwind Node.js packages”. Only the package names and npm’s standard request data are sent. Learn more about npm’s [privacy policy](https://docs.npmjs.com/policies/privacy) and [terms of use](https://docs.npmjs.com/policies/terms).
+If npm is available on the server, the plugin also runs npm, which connects to the npm registry (registry.npmjs.org) to resolve the Tailwind packages (tailwindcss, @tailwindcss/cli, @tailwindcss/forms, @tailwindcss/typography). This happens only when an admin clicks “Install Tailwind Node.js packages” or “Reinstall Tailwind Node.js packages”. Only the package names and npm’s standard request data are sent. Learn more about npm’s [privacy policy](https://docs.npmjs.com/policies/privacy) and [terms of use](https://docs.npmjs.com/policies/terms).
 
 
 == Changelog ==
+
+= 3.0.8 =
+* CompileKit now requires the "install_plugins" capability instead of "manage_options", because it downloads executables and runs server processes. On sites with DISALLOW_FILE_MODS the CompileKit menu is hidden, and on multisite only super admins can use it.
+* Activation no longer runs npm or writes package.json. "Delete Tailwind Node.js packages" again removes package.json together with node_modules and package-lock.json.
+* "Reinstall Tailwind Node.js packages" now updates the packages to their latest versions instead of keeping the versions pinned by package-lock.json.
+* "Reinstall Tailwind Standalone CLI" now keeps the working binary until the new one is downloaded and verified, so a failed download no longer leaves the site without a compiler.
+* Auto-Compilation Mode now runs only on front-end page loads, so block editor requests (save, autosave) no longer wait for a compile.
+* Auto-Compilation now uses one site-wide lock, so two admins refreshing at once no longer compile into the same file.
+* The output CSS file can no longer be the input file or the theme's style.css, which the compile would overwrite.
+* A path error no longer triggers the fallback compiler and is no longer shown twice.
+* The settings page no longer fails when the theme contains an unreadable folder.
+* A failed Standalone CLI download with HTTP 403 now shows the HTTP code instead of a misleading GitHub API rate limit message.
+* Uninstall on multisite now removes the plugin data and files of every site.
+* Fixed untranslated compiler labels, translator comments and an unescaped environment name on the settings page.
+* Corrected the source map description: Local builds include a source map, Staging builds do not.
 
 = 3.0.7 =
 * On activation, the plugin now writes package.json with the Tailwind npm packages (without installing them), so code editors detect Tailwind right away. Requires npm on the server; without it, activation proceeds as before.

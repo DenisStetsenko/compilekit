@@ -8,20 +8,34 @@ if ( ! defined( 'WP_UNINSTALL_PLUGIN' ) ) {
 	exit;
 }
 
-// Remove all plugin options from the database
-delete_option('compilekit_input_css');
-delete_option('compilekit_output_css');
-delete_option('compilekit_environment');
-delete_option('compilekit_run_on_refresh');
-delete_option('compilekit_compiler_mode');
-delete_option('compilekit_worker_threads');
+/**
+ * Removes the plugin data of the current site.
+ */
+function compilekit_delete_site_data() : void {
+	global $wp_filesystem;
 
-// Remove all plugin transients.
-// NOTE: this file runs in a separate process without the plugin's constants,
-// so these literals must stay in sync with COMPILEKIT_TRANSIENT_* in compilekit.php.
-delete_transient( 'compilekit_standalone_cli_version' );
-delete_transient( 'compilekit_tailwindcss_cli_version' );
-delete_transient( 'compilekit_cli_preflight_ok' );
+	// Remove all plugin options from the database
+	delete_option('compilekit_input_css');
+	delete_option('compilekit_output_css');
+	delete_option('compilekit_environment');
+	delete_option('compilekit_run_on_refresh');
+	delete_option('compilekit_compiler_mode');
+	delete_option('compilekit_worker_threads');
+
+	// Remove all plugin transients.
+	// NOTE: this file runs in a separate process without the plugin's constants,
+	// so these literals must stay in sync with COMPILEKIT_TRANSIENT_* in compilekit.php.
+	delete_transient( 'compilekit_standalone_cli_version' );
+	delete_transient( 'compilekit_tailwindcss_cli_version' );
+	delete_transient( 'compilekit_cli_preflight_ok' );
+
+	// Remove the compilekit directory from uploads including node_modules
+	$compilekit_target_path = wp_upload_dir()['basedir'] . '/compilekit';
+
+	if ( $wp_filesystem && $wp_filesystem->is_dir( $compilekit_target_path ) ) {
+		$wp_filesystem->delete( $compilekit_target_path, true );
+	}
+}
 
 // Initialize WordPress Filesystem API
 global $wp_filesystem;
@@ -30,9 +44,13 @@ if ( !function_exists( 'WP_Filesystem' ) ) {
 }
 WP_Filesystem();
 
-// Remove the compilekit directory from uploads including node_modules
-$compilekit_target_path = wp_upload_dir()['basedir'] . '/compilekit';
-
-if ( $wp_filesystem && $wp_filesystem->is_dir( $compilekit_target_path ) ) {
-	$wp_filesystem->delete( $compilekit_target_path, true );
+// Multisite: every site has its own options and uploads/sites/<id>/compilekit directory.
+if ( is_multisite() ) {
+	foreach ( get_sites( array( 'fields' => 'ids', 'number' => 0 ) ) as $compilekit_site_id ) {
+		switch_to_blog( $compilekit_site_id );
+		compilekit_delete_site_data();
+		restore_current_blog();
+	}
+} else {
+	compilekit_delete_site_data();
 }
